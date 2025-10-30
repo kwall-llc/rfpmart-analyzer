@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "pre-build": {
+      "trigger": "before npm run build",
+      "actions": [
+        "npm run lint",
+        "npm run test"
+      ],
+      "failOnError": true
+    },
+    "post-build": {
+      "trigger": "after npm run build",
+      "actions": [
+        "npm run test:e2e"
+      ]
+    },
+    "pre-commit": {
+      "trigger": "before git commit",
+      "actions": [
+        "npm run lint",
+        "npm run test"
+      ],
+      "failOnError": true
+    },
+    "ai-cost-monitoring": {
+      "trigger": "after ai function call",
+      "actions": [
+        "log token usage",
+        "check monthly budget",
+        "alert if > 80% budget used"
+      ]
+    }
+  }
+}

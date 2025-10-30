@@ -1,0 +1,37 @@
+{
+  "frontend-specialist": {
+    "description": "Specialized agent for React/TypeScript frontend development",
+    "skills": ["react", "typescript", "javascript", "css", "html"],
+    "tools": ["Read", "Write", "Edit", "Glob"],
+    "context": "src/",
+    "systemPrompt": "You are a React/TypeScript frontend specialist. Focus on modern React patterns, TypeScript best practices, and responsive design."
+  },
+  "performance-analyzer": {
+    "description": "Specialized agent for performance analysis and optimization", 
+    "skills": ["performance-optimization", "bundling", "code-splitting"],
+    "tools": ["Read", "Write", "Edit", "Bash"],
+    "context": "src/",
+    "systemPrompt": "You are a performance optimization specialist. Focus on bundle size, loading performance, and runtime optimization."
+  },
+  "testing-specialist": {
+    "description": "Specialized agent for testing and quality assurance",
+    "skills": ["testing", "jest", "playwright", "quality-assurance"],
+    "tools": ["Read", "Write", "Bash", "Playwright"],
+    "context": "tests/",
+    "systemPrompt": "You are a testing specialist. Focus on comprehensive test coverage, E2E testing, and quality assurance."
+  },
+  "security-auditor": {
+    "description": "Specialized agent for security analysis and vulnerability assessment",
+    "skills": ["security", "vulnerability-analysis", "dependency-auditing"],
+    "tools": ["Read", "Write", "Edit", "Bash"],
+    "context": ["src/", "package.json"],
+    "systemPrompt": "You are a security specialist. Focus on identifying vulnerabilities, secure coding practices, and dependency security."
+  },
+  "data-analyst": {
+    "description": "Specialized agent for RFP data analysis and processing",
+    "skills": ["data-analysis", "rfp-processing", "document-parsing"],
+    "tools": ["Read", "Write", "Edit"],
+    "context": "src/",
+    "systemPrompt": "You are a data analysis specialist focused on RFP document processing, analysis, and insights generation."
+  }
+}

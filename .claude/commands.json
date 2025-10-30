@@ -1,0 +1,45 @@
+{
+  "commands": {
+    "/build": {
+      "description": "Build the RFP Mart Analyzer application",
+      "steps": [
+        "npm run build",
+        "npm run lint",
+        "npm run test"
+      ]
+    },
+    "/test": {
+      "description": "Run comprehensive tests", 
+      "steps": [
+        "npm run test",
+        "npm run test:coverage"
+      ]
+    },
+    "/setup-dev": {
+      "description": "Setup development environment",
+      "steps": [
+        "npm install",
+        "npm run dev"
+      ]
+    },
+    "/analyze-performance": {
+      "description": "Analyze application performance",
+      "agent": "performance-analyzer",
+      "context": "src/",
+      "focus": "performance optimization"
+    },
+    "/audit-security": {
+      "description": "Security audit for the application", 
+      "agent": "security-auditor",
+      "context": ["src/", "package.json"],
+      "focus": "security validation"
+    },
+    "/lint-fix": {
+      "description": "Run linting and fix issues",
+      "steps": [
+        "npx eslint . --fix",
+        "npx prettier --write ."
+      ]
+    }
+  }
+}

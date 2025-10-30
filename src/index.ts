@@ -270,9 +270,31 @@ class RFPMartAnalyzerApp {
    * Get RFP directories that need processing
    */
   private async getRFPDirectories(): Promise<string[]> {
-    // This would scan the RFPs directory for unprocessed directories
-    // For now, return empty array - this would be implemented based on actual file structure
-    return [];
+    try {
+      const fs = await import('fs-extra');
+      const path = await import('path');
+      
+      // Check if RFPs directory exists
+      if (!await fs.pathExists(config.storage.rfpsDirectory)) {
+        systemLogger.info('RFPs directory does not exist yet');
+        return [];
+      }
+
+      // Get all directories in the RFPs folder
+      const items = await fs.readdir(config.storage.rfpsDirectory, { withFileTypes: true });
+      const directories = items
+        .filter(item => item.isDirectory())
+        .map(item => path.join(config.storage.rfpsDirectory, item.name));
+
+      systemLogger.info(`Found ${directories.length} RFP directories for processing`);
+      return directories;
+
+    } catch (error) {
+      systemLogger.error('Failed to get RFP directories', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+      return [];
+    }
   }
 
   /**

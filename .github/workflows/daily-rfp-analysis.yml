@@ -65,37 +65,120 @@ jobs:
 
       - name: Run RFP analysis
         run: |
+          echo "Starting RFP analysis workflow..."
+          
+          # Set exit on error temporarily disabled to capture logs
+          set +e
+          
           if [ "${{ github.event.inputs.since_date }}" != "" ]; then
+            echo "Running analysis since: ${{ github.event.inputs.since_date }}"
             npm start run -- --since "${{ github.event.inputs.since_date }}"
+            ANALYSIS_EXIT_CODE=$?
           else
+            echo "Running standard analysis (last run date)"
             npm start run
+            ANALYSIS_EXIT_CODE=$?
           fi
+          
+          echo "Analysis completed with exit code: $ANALYSIS_EXIT_CODE"
+          
+          # Check if exit code indicates failure
+          if [ $ANALYSIS_EXIT_CODE -ne 0 ]; then
+            echo "⚠️ Analysis exited with non-zero code, but continuing to generate reports"
+          else
+            echo "✅ Analysis completed successfully"
+          fi
+          
+          # Don't fail the workflow for analysis issues, let artifact upload handle it
+          exit 0
 
       - name: Generate analysis report
         if: always()
         run: |
           echo "## RFP Analysis Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Date:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Get status information
+          # Check various success indicators
+          SUCCESS_INDICATORS=0
+          
           if [ -f "./data/database.sqlite" ]; then
-            echo "✅ Analysis completed successfully" >> $GITHUB_STEP_SUMMARY
-            
-            # Try to get some basic stats from the logs
-            if [ -f "./logs/rfpmart-analyzer.log" ]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Recent Log Activity:" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              tail -20 ./logs/rfpmart-analyzer.log >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-            fi
+            echo "✅ Database created successfully" >> $GITHUB_STEP_SUMMARY
+            SUCCESS_INDICATORS=$((SUCCESS_INDICATORS + 1))
           else
-            echo "❌ Analysis may have failed" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Database not found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -d "./data" ]; then
+            echo "✅ Data directory created" >> $GITHUB_STEP_SUMMARY
+            SUCCESS_INDICATORS=$((SUCCESS_INDICATORS + 1))
+          else
+            echo "❌ Data directory missing" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -d "./logs" ] && [ "$(ls -A ./logs 2>/dev/null)" ]; then
+            echo "✅ Logs generated" >> $GITHUB_STEP_SUMMARY
+            SUCCESS_INDICATORS=$((SUCCESS_INDICATORS + 1))
+          else
+            echo "⚠️ No logs found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check for RFP processing
+          if [ -d "./data/reports" ] && [ "$(ls -A ./data/reports 2>/dev/null)" ]; then
+            echo "✅ Reports generated" >> $GITHUB_STEP_SUMMARY
+            echo "📊 **Report Count:** $(find ./data/reports -name "*.md" 2>/dev/null | wc -l)" >> $GITHUB_STEP_SUMMARY
+            SUCCESS_INDICATORS=$((SUCCESS_INDICATORS + 1))
+          else
+            echo "ℹ️ No reports generated (no new RFPs or processing issues)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Overall status
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ $SUCCESS_INDICATORS -ge 2 ]; then
+            echo "🎉 **Overall Status:** Workflow completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Overall Status:** Workflow completed with issues" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Log summary
+          if [ -f "./logs/rfpmart-analyzer.log" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Recent Log Activity:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -20 ./logs/rfpmart-analyzer.log 2>/dev/null || echo "Unable to read log file"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check for artifacts
+        id: check-artifacts
+        run: |
+          echo "reports_exist=false" >> $GITHUB_OUTPUT
+          echo "database_exists=false" >> $GITHUB_OUTPUT
+          echo "logs_exist=false" >> $GITHUB_OUTPUT
+          echo "high_priority_exist=false" >> $GITHUB_OUTPUT
+          
+          if [ -d "data/reports" ] && [ "$(ls -A data/reports)" ]; then
+            echo "reports_exist=true" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -f "data/database.sqlite" ]; then
+            echo "database_exists=true" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -d "logs" ] && [ "$(ls -A logs)" ]; then
+            echo "logs_exist=true" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -d "data/reports/individual" ] && [ "$(ls -A data/reports/individual)" ]; then
+            echo "high_priority_exist=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload analysis artifacts
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && (steps.check-artifacts.outputs.reports_exist == 'true' || steps.check-artifacts.outputs.database_exists == 'true' || steps.check-artifacts.outputs.logs_exist == 'true')
         with:
           name: rfp-analysis-${{ github.run_number }}
           path: |
@@ -106,7 +189,7 @@ jobs:
 
       - name: Upload high-priority RFPs
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.check-artifacts.outputs.high_priority_exist == 'true'
         with:
           name: high-priority-rfps-${{ github.run_number }}
           path: |

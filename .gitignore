@@ -46,8 +46,8 @@ debug-*.png
 login-*.png
 error-*.png
 
-# Package lock files (choose one)
-package-lock.json
+# Package lock files (keep package-lock.json for dependency caching)
+# package-lock.json
 # yarn.lock
 
 # Optional: Playwright browsers (if you want to install them fresh)

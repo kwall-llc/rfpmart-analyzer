@@ -100,7 +100,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:api.github.com)",
       "Bash(claude plugin list)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git rm:*)",
+      "Bash(gh secret:*)"
     ],
     "deny": [
       "Read(node_modules/)",

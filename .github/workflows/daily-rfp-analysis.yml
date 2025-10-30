@@ -70,12 +70,67 @@ jobs:
           mkdir -p data/reports
           mkdir -p logs
 
+      - name: Initialize application and database
+        run: |
+          echo "Initializing RFP Mart Analyzer..."
+          
+          # Verify environment file was created
+          if [ -f ".env" ]; then
+            echo "✅ Environment file exists"
+            echo "Environment variables:"
+            grep -E "^[A-Z_]+" .env | head -5
+          else
+            echo "❌ Environment file missing"
+            exit 1
+          fi
+          
+          # Show Node.js and npm versions
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          
+          # Test that the application can initialize
+          echo "Testing application initialization..."
+          set +e
+          timeout 60s npm start status
+          STATUS_EXIT_CODE=$?
+          set -e
+          
+          echo "Status command exit code: $STATUS_EXIT_CODE"
+          
+          # Check what was created
+          echo "Checking created files and directories:"
+          ls -la data/ || echo "Data directory not found"
+          ls -la logs/ || echo "Logs directory not found"
+          
+          # Check if database was created during initialization
+          if [ -f "data/database.sqlite" ]; then
+            echo "✅ Database initialized successfully"
+            echo "Database size: $(stat -f%z data/database.sqlite 2>/dev/null || stat -c%s data/database.sqlite) bytes"
+          else
+            echo "⚠️ Database not found after initialization"
+          fi
+          
+          # Check if logs were created
+          if [ -f "logs/rfpmart-analyzer.log" ]; then
+            echo "✅ Log file created"
+            echo "Last few log entries:"
+            tail -5 logs/rfpmart-analyzer.log
+          else
+            echo "⚠️ Log file not found"
+          fi
+
       - name: Run RFP analysis
         run: |
           echo "Starting RFP analysis workflow..."
           
           # Set exit on error temporarily disabled to capture logs
           set +e
+          
+          # Show current directory structure
+          echo "Current directory structure:"
+          ls -la
+          echo "Data directory:"
+          ls -la data/ || echo "Data directory not found"
           
           if [ "${{ github.event.inputs.since_date }}" != "" ]; then
             echo "Running analysis since: ${{ github.event.inputs.since_date }}"
@@ -88,6 +143,11 @@ jobs:
           fi
           
           echo "Analysis completed with exit code: $ANALYSIS_EXIT_CODE"
+          
+          # Show final directory structure
+          echo "Final directory structure:"
+          ls -la data/ || echo "Data directory still not found"
+          ls -la logs/ || echo "Logs directory not found"
           
           # Check if exit code indicates failure
           if [ $ANALYSIS_EXIT_CODE -ne 0 ]; then

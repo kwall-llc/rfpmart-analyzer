@@ -21,7 +21,8 @@
     "exactOptionalPropertyTypes": false
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "types.d.ts"
   ],
   "exclude": [
     "node_modules",

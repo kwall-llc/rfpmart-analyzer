@@ -1,5 +1,5 @@
 import fs from 'fs-extra';
-import path from 'path';
+import * as path from 'path';
 import { config } from '../config/environment';
 import { systemLogger } from '../utils/logger';
 import { formatDateForFile, getTimestamp } from '../utils/dateHelper';

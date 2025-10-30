@@ -63,6 +63,12 @@ jobs:
           echo "TECHNICAL_KEYWORDS=responsive,mobile,accessibility,wcag,ada,508,mobile-first,progressive" >> .env
           echo "LOCATION_PREFERRED=united states,usa,america,north america" >> .env
           echo "LOCATION_ACCEPTABLE=canada,remote,virtual,distributed,online" >> .env
+          echo "AI_PROVIDER=openai" >> .env
+          echo "AI_OPENAI_API_KEY=${{ secrets.AI_OPENAI_API_KEY }}" >> .env
+          echo "AI_OPENAI_MODEL=gpt-4" >> .env
+          echo "CLEANUP_ENABLED=true" >> .env
+          echo "CLEANUP_POOR_FIT_THRESHOLD=30" >> .env
+          echo "CLEANUP_REJECTED_THRESHOLD=50" >> .env
 
       - name: Create data directories
         run: |
@@ -78,7 +84,7 @@ jobs:
           if [ -f ".env" ]; then
             echo "✅ Environment file exists"
             echo "Environment variables:"
-            grep -E "^[A-Z_]+" .env | head -5
+            grep -E "^[A-Z_]+=" .env | head -5
           else
             echo "❌ Environment file missing"
             exit 1
@@ -159,6 +165,20 @@ jobs:
           # Don't fail the workflow for analysis issues, let artifact upload handle it
           exit 0
 
+      - name: Generate GitHub reports
+        if: always()
+        run: |
+          echo "Generating GitHub-friendly reports..."
+          
+          # Generate reports with GitHub Pages support
+          npm start generate-reports -- \
+            --output ./reports \
+            --github-pages \
+            --action-summary \
+            --max-rfps 50
+          
+          echo "Reports generated successfully"
+
       - name: Generate analysis report
         if: always()
         run: |
@@ -194,9 +214,9 @@ jobs:
           fi
           
           # Check for RFP processing
-          if [ -d "./data/reports" ] && [ "$(ls -A ./data/reports 2>/dev/null)" ]; then
+          if [ -d "./reports" ] && [ "$(ls -A ./reports 2>/dev/null)" ]; then
             echo "✅ Reports generated" >> $GITHUB_STEP_SUMMARY
-            echo "📊 **Report Count:** $(find ./data/reports -name "*.md" 2>/dev/null | wc -l)" >> $GITHUB_STEP_SUMMARY
+            echo "📊 **Report Count:** $(find ./reports -name "*.md" 2>/dev/null | wc -l)" >> $GITHUB_STEP_SUMMARY
             SUCCESS_INDICATORS=$((SUCCESS_INDICATORS + 1))
           else
             echo "ℹ️ No reports generated (no new RFPs or processing issues)" >> $GITHUB_STEP_SUMMARY
@@ -227,7 +247,7 @@ jobs:
           echo "logs_exist=false" >> $GITHUB_OUTPUT
           echo "high_priority_exist=false" >> $GITHUB_OUTPUT
           
-          if [ -d "data/reports" ] && [ "$(ls -A data/reports)" ]; then
+          if [ -d "reports" ] && [ "$(ls -A reports)" ]; then
             echo "reports_exist=true" >> $GITHUB_OUTPUT
           fi
           
@@ -239,9 +259,40 @@ jobs:
             echo "logs_exist=true" >> $GITHUB_OUTPUT
           fi
           
-          if [ -d "data/reports/individual" ] && [ "$(ls -A data/reports/individual)" ]; then
+          if [ -d "reports/rfps" ] && [ "$(ls -A reports/rfps)" ]; then
             echo "high_priority_exist=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Commit reports to repository
+        if: always() && steps.check-artifacts.outputs.reports_exist == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Add the reports directory
+          git add reports/
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "📊 Daily RFP Analysis Report - $(date '+%Y-%m-%d')
+            
+            🤖 Generated with Claude Code
+            
+            Co-Authored-By: Claude <noreply@anthropic.com>"
+            
+            git push
+            echo "✅ Reports committed and pushed to repository"
+          fi
+
+      - name: Deploy to GitHub Pages
+        if: always() && steps.check-artifacts.outputs.reports_exist == 'true'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports/docs
+          destination_dir: rfp-reports
 
       - name: Upload analysis artifacts
         uses: actions/upload-artifact@v4
@@ -249,7 +300,7 @@ jobs:
         with:
           name: rfp-analysis-${{ github.run_number }}
           path: |
-            data/reports/
+            reports/
             logs/
             data/database.sqlite
           retention-days: 30
@@ -260,14 +311,14 @@ jobs:
         with:
           name: high-priority-rfps-${{ github.run_number }}
           path: |
-            data/reports/individual/
+            reports/rfps/
           retention-days: 90
 
       - name: Notify on high-priority RFPs
         if: success()
         run: |
           # Check if there are any high-priority reports generated
-          if [ -d "./data/reports/individual" ] && [ "$(ls -A ./data/reports/individual)" ]; then
+          if [ -d "./reports/rfps" ] && [ "$(ls -A ./reports/rfps)" ]; then
             echo "🎯 High-priority RFPs found! Check the artifacts for detailed reports."
             echo "HIGH_PRIORITY_FOUND=true" >> $GITHUB_ENV
           else
@@ -287,16 +338,16 @@ jobs:
             let reportContent = 'High-priority RFPs have been identified in the latest analysis run.';
             
             try {
-              const reportsDir = './data/reports';
+              const reportsDir = './reports';
               const files = fs.readdirSync(reportsDir);
-              const summaryFile = files.find(f => f.startsWith('summary-report-'));
+              const summaryFile = files.find(f => f.startsWith('README.md'));
               
               if (summaryFile) {
                 const summaryPath = path.join(reportsDir, summaryFile);
                 const content = fs.readFileSync(summaryPath, 'utf8');
                 
                 // Extract just the high-priority section
-                const highPriorityMatch = content.match(/## 🚀 High Priority RFPs.*?(?=##|$)/s);
+                const highPriorityMatch = content.match(/## 🎯 Excellent Fit RFPs.*?(?=##|$)/s);
                 if (highPriorityMatch) {
                   reportContent = highPriorityMatch[0];
                 }
@@ -323,6 +374,7 @@ jobs:
             ## Artifacts:
             - Check the [workflow run artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed reports
             - Look for high-priority individual RFP reports
+            - View online dashboard at [GitHub Pages](https://${context.repo.owner}.github.io/${context.repo.repo}/rfp-reports/)
             
             ---
             *This issue was automatically created by the RFP Mart Analyzer workflow.*
@@ -348,50 +400,3 @@ jobs:
             tail -50 ./logs/rfpmart-analyzer.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
-
-  # Optional: Weekly cleanup job
-  weekly-cleanup:
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '0 13 * * 0'  # Run on Sundays
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Create environment file
-        run: |
-          echo "DATA_DIRECTORY=./data" >> .env
-          echo "REPORTS_DIRECTORY=./data/reports" >> .env
-          echo "RFPS_DIRECTORY=./data/rfps" >> .env
-          echo "DATABASE_PATH=./data/database.sqlite" >> .env
-          echo "LOG_LEVEL=info" >> .env
-          echo "LOG_FILE=./logs/rfpmart-analyzer.log" >> .env
-          echo "NODE_ENV=production" >> .env
-
-      - name: Create data directories
-        run: |
-          mkdir -p data/rfps
-          mkdir -p data/reports
-          mkdir -p logs
-
-      - name: Run cleanup
-        run: npm start cleanup -- --days 30
-
-      - name: Upload cleanup report
-        uses: actions/upload-artifact@v4
-        with:
-          name: cleanup-report-${{ github.run_number }}
-          path: logs/
-          retention-days: 7

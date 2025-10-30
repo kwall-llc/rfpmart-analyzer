@@ -7,6 +7,7 @@ import { DATABASE } from '../config/constants';
 import { databaseLogger } from '../utils/logger';
 import { RFPListing } from '../scrapers/rfpMartScraper';
 import { RFPAnalysisResult } from '../analyzers/rfpAnalyzer';
+import { AIAnalysisResult } from '../services/aiAnalyzer';
 
 export interface RFPRunRecord {
   id?: number;
@@ -98,6 +99,9 @@ export class DatabaseManager {
       
       // Create analysis results table
       await this.db.exec(DATABASE.SCHEMA.ANALYSIS_RESULTS);
+      
+      // Create AI analysis table
+      await this.db.exec(DATABASE.SCHEMA.AI_ANALYSIS);
 
       databaseLogger.debug('Database tables created successfully');
 
@@ -443,6 +447,219 @@ export class DatabaseManager {
         mediumScoreRFPs: 0,
         higherEdRFPs: 0,
         avgScore: 0,
+      };
+    }
+  }
+
+  /**
+   * Save AI analysis results to database
+   */
+  async saveAIAnalysis(rfpId: string, analysis: AIAnalysisResult, provider: string, model: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      await this.db.run(
+        `INSERT OR REPLACE INTO ${DATABASE.TABLES.AI_ANALYSIS}
+         (rfp_id, fit_score, fit_rating, reasoning, key_requirements, budget_estimate, 
+          technologies, institution_type, project_type, red_flags, opportunities, 
+          recommendation, confidence, ai_provider, ai_model, analysis_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          rfpId,
+          analysis.fitScore,
+          analysis.fitRating,
+          analysis.reasoning,
+          JSON.stringify(analysis.keyRequirements),
+          analysis.budgetEstimate,
+          JSON.stringify(analysis.technologies),
+          analysis.institutionType,
+          analysis.projectType,
+          JSON.stringify(analysis.redFlags),
+          JSON.stringify(analysis.opportunities),
+          analysis.recommendation,
+          analysis.confidence,
+          provider,
+          model,
+          new Date().toISOString()
+        ]
+      );
+
+      databaseLogger.info('AI analysis saved to database', { 
+        rfpId,
+        fitScore: analysis.fitScore,
+        fitRating: analysis.fitRating
+      });
+
+    } catch (error) {
+      databaseLogger.error('Failed to save AI analysis', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get AI analysis results for an RFP
+   */
+  async getAIAnalysis(rfpId: string): Promise<AIAnalysisResult | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const result = await this.db.get(
+        `SELECT * FROM ${DATABASE.TABLES.AI_ANALYSIS} 
+         WHERE rfp_id = ? 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [rfpId]
+      );
+
+      if (!result) return null;
+
+      return {
+        rfpId: result.rfp_id,
+        fitScore: result.fit_score,
+        fitRating: result.fit_rating,
+        reasoning: result.reasoning,
+        keyRequirements: JSON.parse(result.key_requirements || '[]'),
+        budgetEstimate: result.budget_estimate,
+        technologies: JSON.parse(result.technologies || '[]'),
+        institutionType: result.institution_type,
+        projectType: result.project_type,
+        redFlags: JSON.parse(result.red_flags || '[]'),
+        opportunities: JSON.parse(result.opportunities || '[]'),
+        recommendation: result.recommendation,
+        confidence: result.confidence
+      };
+
+    } catch (error) {
+      databaseLogger.error('Failed to get AI analysis', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Get all AI analysis results with pagination
+   */
+  async getAllAIAnalysis(options: {
+    fitRating?: string;
+    minScore?: number;
+    limit?: number;
+    offset?: number;
+    orderBy?: 'fit_score' | 'analysis_date' | 'rfp_id';
+    orderDirection?: 'ASC' | 'DESC';
+  } = {}): Promise<Array<AIAnalysisResult & { analysisDate: string }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      let query = `SELECT * FROM ${DATABASE.TABLES.AI_ANALYSIS} WHERE 1=1`;
+      const params: any[] = [];
+
+      if (options.fitRating) {
+        query += ' AND fit_rating = ?';
+        params.push(options.fitRating);
+      }
+
+      if (options.minScore !== undefined) {
+        query += ' AND fit_score >= ?';
+        params.push(options.minScore);
+      }
+
+      // Add ordering
+      const orderBy = options.orderBy || 'analysis_date';
+      const orderDirection = options.orderDirection || 'DESC';
+      query += ` ORDER BY ${orderBy} ${orderDirection}`;
+
+      // Add pagination
+      if (options.limit) {
+        query += ' LIMIT ?';
+        params.push(options.limit);
+      }
+
+      if (options.offset) {
+        query += ' OFFSET ?';
+        params.push(options.offset);
+      }
+
+      const results = await this.db.all(query, params);
+
+      return results.map(result => ({
+        rfpId: result.rfp_id,
+        fitScore: result.fit_score,
+        fitRating: result.fit_rating,
+        reasoning: result.reasoning,
+        keyRequirements: JSON.parse(result.key_requirements || '[]'),
+        budgetEstimate: result.budget_estimate,
+        technologies: JSON.parse(result.technologies || '[]'),
+        institutionType: result.institution_type,
+        projectType: result.project_type,
+        redFlags: JSON.parse(result.red_flags || '[]'),
+        opportunities: JSON.parse(result.opportunities || '[]'),
+        recommendation: result.recommendation,
+        confidence: result.confidence,
+        analysisDate: result.analysis_date
+      }));
+
+    } catch (error) {
+      databaseLogger.error('Failed to get all AI analyses', { 
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get AI analysis statistics
+   */
+  async getAIAnalysisStats(): Promise<{
+    totalAnalyzed: number;
+    excellentFit: number;
+    goodFit: number;
+    poorFit: number;
+    rejected: number;
+    averageScore: number;
+    averageConfidence: number;
+  }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const stats = await this.db.get(`
+        SELECT 
+          COUNT(*) as totalAnalyzed,
+          COUNT(CASE WHEN fit_rating = 'excellent' THEN 1 END) as excellentFit,
+          COUNT(CASE WHEN fit_rating = 'good' THEN 1 END) as goodFit,
+          COUNT(CASE WHEN fit_rating = 'poor' THEN 1 END) as poorFit,
+          COUNT(CASE WHEN fit_rating = 'rejected' THEN 1 END) as rejected,
+          ROUND(AVG(fit_score), 1) as averageScore,
+          ROUND(AVG(confidence), 1) as averageConfidence
+        FROM ${DATABASE.TABLES.AI_ANALYSIS}
+      `);
+
+      return stats || {
+        totalAnalyzed: 0,
+        excellentFit: 0,
+        goodFit: 0,
+        poorFit: 0,
+        rejected: 0,
+        averageScore: 0,
+        averageConfidence: 0
+      };
+
+    } catch (error) {
+      databaseLogger.error('Failed to get AI analysis stats', { 
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return {
+        totalAnalyzed: 0,
+        excellentFit: 0,
+        goodFit: 0,
+        poorFit: 0,
+        rejected: 0,
+        averageScore: 0,
+        averageConfidence: 0
       };
     }
   }

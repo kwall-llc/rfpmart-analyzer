@@ -6,6 +6,11 @@ import { RFP_MART, FILE_HANDLING, ERROR_MESSAGES } from '../config/constants';
 import { scraperLogger } from '../utils/logger';
 import { parseRFPDate, isRecentPosting, formatDateForFile } from '../utils/dateHelper';
 import { AuthManager } from './authManager';
+import { FileExtractor } from '../utils/fileExtractor';
+import { AIAnalyzer } from '../services/aiAnalyzer';
+import { FitReportGenerator } from '../services/fitReportGenerator';
+import { RFPCleanupManager } from '../services/rfpCleanupManager';
+import { DatabaseManager } from '../storage/database';
 
 export interface RFPListing {
   id: string;
@@ -21,6 +26,9 @@ export interface RFPListing {
 export interface ScrapingResult {
   rfpsFound: RFPListing[];
   rfpsDownloaded: number;
+  rfpsAnalyzed: number;
+  goodFitRFPs: number;
+  cleanedUpRFPs: number;
   errors: string[];
   lastRunDate: Date;
 }
@@ -30,9 +38,17 @@ export class RFPMartScraper {
   private page?: Page;
   private authManager?: AuthManager;
   private downloadPath: string;
+  private aiAnalyzer: AIAnalyzer;
+  private reportGenerator: FitReportGenerator;
+  private cleanupManager: RFPCleanupManager;
+  private databaseManager: DatabaseManager;
 
   constructor() {
     this.downloadPath = config.storage.rfpsDirectory;
+    this.aiAnalyzer = new AIAnalyzer();
+    this.reportGenerator = new FitReportGenerator();
+    this.cleanupManager = new RFPCleanupManager();
+    this.databaseManager = new DatabaseManager();
   }
 
   /**
@@ -83,6 +99,9 @@ export class RFPMartScraper {
       // Initialize authentication manager
       this.authManager = new AuthManager(this.page);
 
+      // Initialize database
+      await this.databaseManager.initialize();
+
       scraperLogger.info('RFP Mart scraper initialized successfully');
 
     } catch (error) {
@@ -102,6 +121,9 @@ export class RFPMartScraper {
     const result: ScrapingResult = {
       rfpsFound: [],
       rfpsDownloaded: 0,
+      rfpsAnalyzed: 0,
+      goodFitRFPs: 0,
+      cleanedUpRFPs: 0,
       errors: [],
       lastRunDate: new Date(),
     };
@@ -145,9 +167,17 @@ export class RFPMartScraper {
         }
       }
 
+      // Perform AI analysis on downloaded RFPs if downloads were successful
+      if (result.rfpsDownloaded > 0) {
+        await this.performAIAnalysis(filteredListings, result);
+      }
+
       scraperLogger.info('RFP scraping completed', {
         found: result.rfpsFound.length,
         downloaded: result.rfpsDownloaded,
+        analyzed: result.rfpsAnalyzed,
+        goodFit: result.goodFitRFPs,
+        cleanedUp: result.cleanedUpRFPs,
         errors: result.errors.length,
       });
 
@@ -185,6 +215,47 @@ export class RFPMartScraper {
     } catch (error) {
       scraperLogger.error(ERROR_MESSAGES.NAVIGATION_FAILED, { error: error instanceof Error ? error.message : String(error) });
       throw error;
+    }
+  }
+
+  /**
+   * Get geographic RFP page URLs from category page
+   */
+  private async getGeographicRFPPages(): Promise<string[]> {
+    if (!this.page) throw new Error('Page not initialized');
+
+    try {
+      scraperLogger.info('Extracting geographic RFP page URLs');
+      
+      // Look for geographic links (USA, state-specific pages)
+      const geographicLinks = await this.page.$$('a[href*="usa"][href*="rfp"]');
+      const urls: string[] = [];
+      
+      for (const link of geographicLinks) {
+        const href = await link.getAttribute('href');
+        if (href && !href.includes('state-name') && !href.includes('usa-usa')) {
+          const fullUrl = href.startsWith('http') ? href : `${RFP_MART.BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
+          urls.push(fullUrl);
+        }
+      }
+      
+      // Prioritize USA main page and larger states
+      const priorityUrls = urls.filter(url => 
+        url.includes('usa-rfp-bids.html') || 
+        url.includes('california') || 
+        url.includes('texas') || 
+        url.includes('florida') || 
+        url.includes('new-york')
+      );
+      
+      const finalUrls = priorityUrls.length > 0 ? priorityUrls.slice(0, 3) : urls.slice(0, 5);
+      
+      scraperLogger.info(`Found ${urls.length} geographic pages, using ${finalUrls.length} priority pages`);
+      return finalUrls;
+      
+    } catch (error) {
+      scraperLogger.error('Failed to extract geographic RFP pages', { error: error instanceof Error ? error.message : String(error) });
+      return [];
     }
   }
 
@@ -235,89 +306,57 @@ export class RFPMartScraper {
    */
   private async extractRFPData(element: any, index: number): Promise<RFPListing | null> {
     try {
-      // Extract title - try multiple approaches
-      let title = null;
-      
-      // First, try to find a title element within the current element
+      // Extract title and detail link from the first div (.rfpmartIN-descriptionCategory)
       const titleElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.TITLE);
-      if (titleElement) {
-        title = await titleElement.textContent();
-      }
-      
-      // If that didn't work, check if the element itself is a title element (h4)
-      if (!title) {
-        const tagName = await element.evaluate((el: any) => el.tagName?.toLowerCase());
-        if (tagName === 'h4') {
-          title = await element.textContent();
-        }
-      }
-      
-      // If still no title, try to get text from a link within the element
-      if (!title) {
-        const linkElement = await element.$('a[href*="usa"][href*="rfp.html"]');
-        if (linkElement) {
-          title = await linkElement.textContent();
-        }
-      }
-
-      if (!title) {
-        scraperLogger.warn(`No title found for RFP item ${index}`);
+      if (!titleElement) {
+        scraperLogger.warn(`No title element found for RFP item ${index}`);
         return null;
       }
 
-      // Extract dates
-      const postedDateElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.DATE_POSTED);
-      const postedDate = postedDateElement ? await postedDateElement.textContent() : null;
+      const title = await titleElement.textContent();
+      const detailUrl = await titleElement.getAttribute('href');
 
-      const dueDateElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.DUE_DATE);
-      const dueDate = dueDateElement ? await dueDateElement.textContent() : null;
-
-      // Extract download link - try multiple approaches
-      let downloadUrl = null;
-      
-      // First, try the generic download link selector
-      const downloadElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.DOWNLOAD_LINK);
-      if (downloadElement) {
-        downloadUrl = await downloadElement.getAttribute('href');
+      if (!title || !detailUrl) {
+        scraperLogger.warn(`Missing title or detail URL for RFP item ${index}`);
+        return null;
       }
-      
-      // If no download link found, try specific patterns
-      if (!downloadUrl) {
-        // Try files.rfpmart.com download links
-        const filesLinkElement = await element.$('a[href*="files.rfpmart.com"]');
-        if (filesLinkElement) {
-          downloadUrl = await filesLinkElement.getAttribute('href');
+
+      // Extract dates from the second div
+      const dateElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.DATE_POSTED);
+      const dateText = dateElement ? await dateElement.textContent() : '';
+
+      // Parse the date text to extract posted date and expiry date
+      let postedDate = null;
+      let dueDate = null;
+
+      if (dateText) {
+        // The date text contains both "Posted Date" and "Expiry Date"
+        // Example: "Posted Date Thursday, 30 October, 2025 Expiry Date Friday, 5 December, 2025"
+        
+        const postedMatch = dateText.match(/Posted Date\s+(.+?)\s+Expiry Date/);
+        if (postedMatch) {
+          postedDate = postedMatch[1].trim();
+        }
+
+        const expiryMatch = dateText.match(/Expiry Date\s+(.+?)$/);
+        if (expiryMatch) {
+          dueDate = expiryMatch[1].trim();
         }
       }
-      
-      // If still no download link, try the RFP detail page link
-      if (!downloadUrl) {
-        const rfpLinkElement = await element.$('a[href*="usa"][href*="rfp.html"]');
-        if (rfpLinkElement) {
-          downloadUrl = await rfpLinkElement.getAttribute('href');
-        }
-      }
 
-      // Extract RFP ID (try multiple approaches)
-      let id = '';
-      const idElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.RFP_ID);
-      if (idElement) {
-        id = await idElement.textContent() || '';
-      } else {
-        // Generate ID from title and date
-        id = this.generateRFPId(title, postedDate);
-      }
+      // Generate RFP ID from title and date
+      const id = this.generateRFPId(title, postedDate);
 
-      // Create detail URL if download URL exists
-      const detailUrl = downloadUrl ? new URL(downloadUrl, RFP_MART.BASE_URL).href : undefined;
+      // Create full detail URL
+      const fullDetailUrl = detailUrl.startsWith('http') ? detailUrl : `${RFP_MART.BASE_URL}/${detailUrl}`;
 
       const rfp: RFPListing = {
         id: id.trim(),
         title: title.trim(),
         postedDate: postedDate?.trim(),
         dueDate: dueDate?.trim(),
-        downloadUrl: downloadUrl ? new URL(downloadUrl, RFP_MART.BASE_URL).href : undefined,
-        detailUrl,
+        downloadUrl: undefined, // Will be populated when we navigate to detail page
+        detailUrl: fullDetailUrl,
       };
 
       scraperLogger.debug('Extracted RFP data', { rfp });
@@ -333,12 +372,38 @@ export class RFPMartScraper {
    * Download an RFP document
    */
   private async downloadRFP(rfp: RFPListing): Promise<boolean> {
-    if (!this.page || !rfp.downloadUrl) {
+    if (!this.page || !rfp.detailUrl) {
+      scraperLogger.warn(`No detail URL for RFP: ${rfp.id}`);
       return false;
     }
 
     try {
-      scraperLogger.info(`Downloading RFP: ${rfp.title}`, { rfpId: rfp.id, downloadUrl: rfp.downloadUrl });
+      scraperLogger.info(`Processing RFP: ${rfp.title}`, { rfpId: rfp.id, detailUrl: rfp.detailUrl });
+
+      // Navigate to the RFP detail page
+      await this.page.goto(rfp.detailUrl, {
+        waitUntil: 'networkidle',
+        timeout: RFP_MART.WAIT_TIMES.NAVIGATION,
+      });
+
+      // Wait a moment for the page to load
+      await this.page.waitForTimeout(3000);
+
+      // Look for download links on the detail page
+      const downloadLinks = await this.page.$$('a[href*="files.rfpmart.com"]');
+      
+      if (downloadLinks.length === 0) {
+        scraperLogger.warn(`No download links found on detail page for RFP: ${rfp.id}`);
+        return false;
+      }
+
+      const downloadUrl = await downloadLinks[0].getAttribute('href');
+      if (!downloadUrl) {
+        scraperLogger.warn(`Download link has no href for RFP: ${rfp.id}`);
+        return false;
+      }
+
+      scraperLogger.info(`Found download link: ${downloadUrl}`, { rfpId: rfp.id });
 
       // Create directory for this RFP
       const rfpDir = this.createRFPDirectory(rfp);
@@ -347,13 +412,8 @@ export class RFPMartScraper {
       // Set up download listener
       const downloadPromise = this.page.waitForEvent('download', { timeout: FILE_HANDLING.DOWNLOAD_TIMEOUT });
 
-      // Navigate to download URL or click download link
-      if (rfp.downloadUrl.startsWith('http')) {
-        await this.page.goto(rfp.downloadUrl);
-      } else {
-        // If it's a relative URL, try to click it
-        await this.page.click(`a[href="${rfp.downloadUrl}"]`);
-      }
+      // Click the download link
+      await downloadLinks[0].click();
 
       // Wait for download to start
       const download = await downloadPromise;
@@ -362,10 +422,22 @@ export class RFPMartScraper {
       const suggestedFilename = download.suggestedFilename();
       const downloadPath = path.join(rfpDir, suggestedFilename);
 
-      // Save the download
+      // Save the download to the RFP directory
       await download.saveAs(downloadPath);
 
       scraperLogger.info(`Successfully downloaded RFP to ${downloadPath}`);
+
+      // Extract ZIP files if any were downloaded
+      const extractionResult = await FileExtractor.extractZipFiles(rfpDir);
+      if (extractionResult.extractedFiles.length > 0) {
+        scraperLogger.info(`Extracted ${extractionResult.extractedFiles.length} files from downloaded archives`);
+      }
+      if (extractionResult.errors.length > 0) {
+        scraperLogger.warn(`Extraction errors: ${extractionResult.errors.join(', ')}`);
+      }
+
+      // Update RFP object with download URL for metadata
+      rfp.downloadUrl = downloadUrl;
 
       // Save RFP metadata
       await this.saveRFPMetadata(rfp, rfpDir);
@@ -437,6 +509,101 @@ export class RFPMartScraper {
   }
 
   /**
+   * Perform AI analysis on downloaded RFPs
+   */
+  private async performAIAnalysis(rfps: RFPListing[], result: ScrapingResult): Promise<void> {
+    try {
+      scraperLogger.info('Starting AI analysis of downloaded RFPs', { count: rfps.length });
+
+      const analysisResults = new Map();
+      const fitReports = [];
+
+      // Analyze each RFP
+      for (const rfp of rfps) {
+        try {
+          const rfpDir = this.createRFPDirectory(rfp);
+          
+          // Check if RFP directory exists (was downloaded)
+          if (!await fs.pathExists(rfpDir)) {
+            continue;
+          }
+
+          // Perform AI analysis
+          const analysis = await this.aiAnalyzer.analyzeRFPFit(rfp, rfpDir);
+          analysisResults.set(rfp.id, analysis);
+          result.rfpsAnalyzed++;
+
+          // Save analysis to database
+          await this.databaseManager.saveAIAnalysis(
+            rfp.id, 
+            analysis, 
+            config.ai.provider, 
+            config.ai.openai?.model || 'gpt-4'
+          );
+
+          // Generate fit report for good fits
+          if (analysis.fitRating === 'excellent' || analysis.fitRating === 'good') {
+            const fitReport = await this.reportGenerator.generateFitReport(rfp, analysis, rfpDir);
+            fitReports.push(fitReport);
+            result.goodFitRFPs++;
+            
+            scraperLogger.info(`Generated fit report for good RFP: ${rfp.id}`, {
+              fitScore: analysis.fitScore,
+              fitRating: analysis.fitRating
+            });
+          }
+
+        } catch (error) {
+          const errorMsg = `Failed to analyze RFP ${rfp.id}: ${error instanceof Error ? error.message : String(error)}`;
+          result.errors.push(errorMsg);
+          scraperLogger.error(errorMsg);
+        }
+      }
+
+      // Generate summary report
+      if (fitReports.length > 0) {
+        await this.reportGenerator.generateSummaryReport(fitReports, config.storage.reportsDirectory);
+      }
+
+      // Cleanup poor-fit RFPs if enabled
+      if (config.ai.cleanup.poorFits || config.ai.cleanup.rejected) {
+        const cleanupResult = await this.cleanupManager.cleanupRFPs(
+          analysisResults, 
+          this.downloadPath,
+          {
+            cleanupPoorFits: config.ai.cleanup.poorFits,
+            cleanupRejected: config.ai.cleanup.rejected,
+            preserveReports: true,
+            preserveMetadata: true
+          }
+        );
+
+        result.cleanedUpRFPs = cleanupResult.cleaned;
+
+        // Generate cleanup report
+        await this.cleanupManager.generateCleanupReport(cleanupResult, config.storage.reportsDirectory);
+
+        scraperLogger.info('RFP cleanup completed', {
+          cleaned: cleanupResult.cleaned,
+          preserved: cleanupResult.preserved,
+          errors: cleanupResult.errors.length
+        });
+      }
+
+      scraperLogger.info('AI analysis completed', {
+        analyzed: result.rfpsAnalyzed,
+        goodFit: result.goodFitRFPs,
+        cleanedUp: result.cleanedUpRFPs
+      });
+
+    } catch (error) {
+      const errorMsg = `AI analysis failed: ${error instanceof Error ? error.message : String(error)}`;
+      result.errors.push(errorMsg);
+      scraperLogger.error(errorMsg);
+    }
+  }
+
+  /**
    * Clean up browser resources
    */
   async cleanup(): Promise<void> {
@@ -451,6 +618,10 @@ export class RFPMartScraper {
 
       if (this.browser) {
         await this.browser.close();
+      }
+
+      if (this.databaseManager) {
+        await this.databaseManager.close();
       }
 
       scraperLogger.info('Scraper cleanup completed');

@@ -108,7 +108,11 @@
       "Bash(npm ci:*)",
       "Bash(npx playwright install:*)",
       "Bash(timeout 60s npm start run -- --dry-run)",
-      "Bash(gtimeout 60s npm start run -- --dry-run)"
+      "Bash(gtimeout 60s npm start run -- --dry-run)",
+      "Bash(code:*)",
+      "Bash(open:*)",
+      "Bash(nano:*)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [
       "Read(node_modules/)",

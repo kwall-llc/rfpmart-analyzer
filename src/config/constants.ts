@@ -14,12 +14,13 @@ export const RFP_MART = {
       ERROR: '.error, .alert-danger, .invalid-feedback, .error-message',
     },
     RFP_LISTING: {
-      CONTAINER: 'body, .content, .main-content, #content',
-      ITEM: 'h4, .rfp-item, .contract-item, .opportunity-item, tr',
-      TITLE: 'h4, .title, .rfp-title, h3',
-      DATE_POSTED: '.date-posted, .posted-date, .created-date',
-      DUE_DATE: '.due-date, .closing-date, .deadline',
+      CONTAINER: '#home',
+      ITEM: '#home li',
+      TITLE: '.rfpmartIN-descriptionCategory a',
+      DATE_POSTED: 'div:nth-child(2)', // Second div contains both posted and expiry dates
+      DUE_DATE: 'div:nth-child(2)', // Same div contains both dates
       DOWNLOAD_LINK: 'a[href*="files.rfpmart.com"], a[href*="download"], a[href*="document"], .download-btn',
+      DETAIL_LINK: '.rfpmartIN-descriptionCategory a', // Link to detail page
       NEXT_PAGE: '.next, .pagination-next, a[rel="next"]',
       RFP_ID: '.rfp-id, .contract-id, .opportunity-id',
     },
@@ -75,6 +76,7 @@ export const DATABASE = {
     RFP_RUNS: 'rfp_runs',
     RFPS: 'rfps',
     ANALYSIS_RESULTS: 'analysis_results',
+    AI_ANALYSIS: 'ai_analysis',
   },
   SCHEMA: {
     RFP_RUNS: `
@@ -112,6 +114,30 @@ export const DATABASE = {
         score INTEGER NOT NULL,
         details TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rfp_id) REFERENCES rfps (id)
+      )
+    `,
+    AI_ANALYSIS: `
+      CREATE TABLE IF NOT EXISTS ai_analysis (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rfp_id TEXT NOT NULL,
+        fit_score INTEGER NOT NULL,
+        fit_rating TEXT NOT NULL,
+        reasoning TEXT,
+        key_requirements TEXT,
+        budget_estimate TEXT,
+        technologies TEXT,
+        institution_type TEXT,
+        project_type TEXT,
+        red_flags TEXT,
+        opportunities TEXT,
+        recommendation TEXT,
+        confidence INTEGER DEFAULT 0,
+        ai_provider TEXT,
+        ai_model TEXT,
+        analysis_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (rfp_id) REFERENCES rfps (id)
       )
     `,

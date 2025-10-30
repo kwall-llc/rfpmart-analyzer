@@ -10,6 +10,8 @@ import { DatabaseManager } from './storage/database';
 import { FileManager } from './storage/fileManager';
 import { ReportGenerator } from './analyzers/reportGenerator';
 import { SUCCESS_MESSAGES, RECOMMENDATION_LEVELS } from './config/constants';
+import fs from 'fs-extra';
+import * as path from 'path';
 
 class RFPMartAnalyzerApp {
   private db: DatabaseManager;
@@ -271,9 +273,6 @@ class RFPMartAnalyzerApp {
    */
   private async getRFPDirectories(): Promise<string[]> {
     try {
-      const fs = await import('fs-extra');
-      const path = await import('path');
-      
       // Check if RFPs directory exists
       if (!await fs.pathExists(config.storage.rfpsDirectory)) {
         systemLogger.info('RFPs directory does not exist yet');

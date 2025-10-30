@@ -1,0 +1,39 @@
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {
+        "MAX_THOUGHTS": "1000"
+      }
+    },
+    "memory": {
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_STORAGE_PATH": ".claude/memory"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "ALLOWED_DIRECTORIES": "./src,./data,./logs,./tests,./.claude,./docs"
+      }
+    },
+    "browser-tools": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-browser"],
+      "env": {
+        "BROWSER_HEADLESS": "true"
+      }
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "env": {
+        "ENABLE_IMAGE_FETCH": "true"
+      }
+    }
+  }
+}

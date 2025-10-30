@@ -1,0 +1,247 @@
+name: Daily RFP Analysis
+
+on:
+  schedule:
+    # Run daily at 9 AM EST (1 PM UTC)
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      since_date:
+        description: 'Only process RFPs since this date (YYYY-MM-DD)'
+        required: false
+        type: string
+      force_full_run:
+        description: 'Force full analysis workflow'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  NODE_ENV: production
+
+jobs:
+  rfp-analysis:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Build project
+        run: npm run build
+
+      - name: Create environment file
+        run: |
+          echo "RFPMART_USERNAME=${{ secrets.RFPMART_USERNAME }}" >> .env
+          echo "RFPMART_PASSWORD=${{ secrets.RFPMART_PASSWORD }}" >> .env
+          echo "RFP_CATEGORY_URL=https://www.rfpmart.com/web-design-and-development-rfp-government-contract.html" >> .env
+          echo "MIN_BUDGET_ACCEPTABLE=50000" >> .env
+          echo "MIN_BUDGET_PREFERRED=100000" >> .env
+          echo "DATA_DIRECTORY=./data" >> .env
+          echo "REPORTS_DIRECTORY=./data/reports" >> .env
+          echo "RFPS_DIRECTORY=./data/rfps" >> .env
+          echo "DATABASE_PATH=./data/database.sqlite" >> .env
+          echo "LOG_LEVEL=info" >> .env
+          echo "LOG_FILE=./logs/rfpmart-analyzer.log" >> .env
+          echo "NODE_ENV=production" >> .env
+
+      - name: Create data directories
+        run: |
+          mkdir -p data/rfps
+          mkdir -p data/reports
+          mkdir -p logs
+
+      - name: Run RFP analysis
+        run: |
+          if [ "${{ github.event.inputs.since_date }}" != "" ]; then
+            npm start run -- --since "${{ github.event.inputs.since_date }}"
+          else
+            npm start run
+          fi
+
+      - name: Generate analysis report
+        if: always()
+        run: |
+          echo "## RFP Analysis Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Get status information
+          if [ -f "./data/database.sqlite" ]; then
+            echo "✅ Analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+            
+            # Try to get some basic stats from the logs
+            if [ -f "./logs/rfpmart-analyzer.log" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Recent Log Activity:" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              tail -20 ./logs/rfpmart-analyzer.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ Analysis may have failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload analysis artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rfp-analysis-${{ github.run_number }}
+          path: |
+            data/reports/
+            logs/
+            data/database.sqlite
+          retention-days: 30
+
+      - name: Upload high-priority RFPs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: high-priority-rfps-${{ github.run_number }}
+          path: |
+            data/reports/individual/
+          retention-days: 90
+
+      - name: Notify on high-priority RFPs
+        if: success()
+        run: |
+          # Check if there are any high-priority reports generated
+          if [ -d "./data/reports/individual" ] && [ "$(ls -A ./data/reports/individual)" ]; then
+            echo "🎯 High-priority RFPs found! Check the artifacts for detailed reports."
+            echo "HIGH_PRIORITY_FOUND=true" >> $GITHUB_ENV
+          else
+            echo "No high-priority RFPs identified in this run."
+            echo "HIGH_PRIORITY_FOUND=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create GitHub Issue for High-Priority RFPs
+        if: env.HIGH_PRIORITY_FOUND == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read the summary report if it exists
+            let reportContent = 'High-priority RFPs have been identified in the latest analysis run.';
+            
+            try {
+              const reportsDir = './data/reports';
+              const files = fs.readdirSync(reportsDir);
+              const summaryFile = files.find(f => f.startsWith('summary-report-'));
+              
+              if (summaryFile) {
+                const summaryPath = path.join(reportsDir, summaryFile);
+                const content = fs.readFileSync(summaryPath, 'utf8');
+                
+                // Extract just the high-priority section
+                const highPriorityMatch = content.match(/## 🚀 High Priority RFPs.*?(?=##|$)/s);
+                if (highPriorityMatch) {
+                  reportContent = highPriorityMatch[0];
+                }
+              }
+            } catch (error) {
+              console.log('Could not read summary report:', error.message);
+            }
+            
+            const issueTitle = `🎯 High-Priority RFPs Found - ${new Date().toISOString().split('T')[0]}`;
+            const issueBody = `# High-Priority RFPs Detected
+            
+            The automated RFP analysis has identified high-priority opportunities that match KWALL's criteria.
+            
+            ## Quick Actions Required:
+            1. Review the attached analysis reports
+            2. Evaluate RFPs for immediate pursuit
+            3. Assign team members for proposal development
+            4. Check due dates and plan accordingly
+            
+            ## Analysis Details:
+            
+            ${reportContent}
+            
+            ## Artifacts:
+            - Check the [workflow run artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed reports
+            - Look for high-priority individual RFP reports
+            
+            ---
+            *This issue was automatically created by the RFP Mart Analyzer workflow.*
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: ['rfp', 'high-priority', 'automated']
+            });
+
+      - name: Cleanup on failure
+        if: failure()
+        run: |
+          echo "❌ Analysis workflow failed. Check logs for details."
+          
+          # Upload error logs for debugging
+          if [ -f "./logs/rfpmart-analyzer.log" ]; then
+            echo "Error logs:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -50 ./logs/rfpmart-analyzer.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Optional: Weekly cleanup job
+  weekly-cleanup:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 13 * * 0'  # Run on Sundays
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Create environment file
+        run: |
+          echo "DATA_DIRECTORY=./data" >> .env
+          echo "REPORTS_DIRECTORY=./data/reports" >> .env
+          echo "RFPS_DIRECTORY=./data/rfps" >> .env
+          echo "DATABASE_PATH=./data/database.sqlite" >> .env
+          echo "LOG_LEVEL=info" >> .env
+          echo "LOG_FILE=./logs/rfpmart-analyzer.log" >> .env
+          echo "NODE_ENV=production" >> .env
+
+      - name: Create data directories
+        run: |
+          mkdir -p data/rfps
+          mkdir -p data/reports
+          mkdir -p logs
+
+      - name: Run cleanup
+        run: npm start cleanup -- --days 30
+
+      - name: Upload cleanup report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-report-${{ github.run_number }}
+          path: logs/
+          retention-days: 7

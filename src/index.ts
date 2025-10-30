@@ -8,6 +8,7 @@ import { RFPProcessor } from './processors/rfpProcessor';
 import { RFPAnalyzer } from './analyzers/rfpAnalyzer';
 import { DatabaseManager } from './storage/database';
 import { FileManager } from './storage/fileManager';
+import { DataPersistenceManager } from './storage/dataPersistence';
 import { ReportGenerator } from './analyzers/reportGenerator';
 import { SUCCESS_MESSAGES, RECOMMENDATION_LEVELS } from './config/constants';
 import fs from 'fs-extra';
@@ -16,6 +17,7 @@ import * as path from 'path';
 class RFPMartAnalyzerApp {
   private db: DatabaseManager;
   private fileManager: FileManager;
+  private persistenceManager: DataPersistenceManager;
   private scraper: RFPMartScraper;
   private processor: RFPProcessor;
   private analyzer: RFPAnalyzer;
@@ -24,6 +26,7 @@ class RFPMartAnalyzerApp {
   constructor() {
     this.db = new DatabaseManager();
     this.fileManager = new FileManager();
+    this.persistenceManager = new DataPersistenceManager();
     this.scraper = new RFPMartScraper();
     this.processor = new RFPProcessor();
     this.analyzer = new RFPAnalyzer();
@@ -40,9 +43,46 @@ class RFPMartAnalyzerApp {
       // Ensure directories exist
       ensureDirectories();
 
+      // Initialize persistence manager first
+      await this.persistenceManager.initialize();
+
+      // Check for persistent data and merge if available
+      const persistentState = await this.persistenceManager.checkPersistentDataState();
+      if (persistentState) {
+        systemLogger.info('📥 Found persistent database', {
+          records: persistentState.recordCount,
+          size: persistentState.fileSize,
+          lastModified: persistentState.lastModified
+        });
+
+        // Download and merge persistent data
+        const downloadResult = await this.persistenceManager.downloadPersistentData();
+        if (downloadResult.success) {
+          systemLogger.info('✅ Downloaded persistent database', { message: downloadResult.message });
+        } else {
+          systemLogger.warn('⚠️ Failed to download persistent database', { 
+            error: downloadResult.error 
+          });
+        }
+      } else {
+        systemLogger.info('ℹ️ No persistent database found - starting fresh');
+      }
+
       // Initialize components
       await this.db.initialize();
       await this.fileManager.initialize();
+
+      // Merge persistent data if we have it
+      if (persistentState) {
+        const mergeResult = await this.persistenceManager.mergePersistentData();
+        if (mergeResult.success) {
+          systemLogger.info('🔄 Merged persistent data', { message: mergeResult.message });
+        } else {
+          systemLogger.warn('⚠️ Failed to merge persistent data', { 
+            error: mergeResult.error 
+          });
+        }
+      }
 
       systemLogger.info('✅ RFP Mart Analyzer initialized successfully');
 
@@ -81,7 +121,19 @@ class RFPMartAnalyzerApp {
       // Step 5: Record run in database
       await this.recordRun(scrapingResult, analysisResults);
 
-      // Step 6: Cleanup old files
+      // Step 6: Upload updated database to persistent storage
+      const uploadResult = await this.persistenceManager.uploadPersistentData();
+      if (uploadResult.success) {
+        systemLogger.info('📤 Uploaded updated database to persistent storage', { 
+          message: uploadResult.message 
+        });
+      } else {
+        systemLogger.warn('⚠️ Failed to upload database to persistent storage', { 
+          error: uploadResult.error 
+        });
+      }
+
+      // Step 7: Cleanup old files
       await this.cleanup();
 
       systemLogger.info('🎉 Complete workflow finished successfully');

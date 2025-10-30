@@ -74,7 +74,43 @@ jobs:
         run: |
           mkdir -p data/rfps
           mkdir -p data/reports
+          mkdir -p data-store
           mkdir -p logs
+
+      - name: Download persistent database
+        run: |
+          echo "Downloading persistent database from data-store branch..."
+          
+          # Create orphan branch for data storage if it doesn't exist
+          git fetch origin data-store || {
+            echo "data-store branch doesn't exist yet, will create it after analysis"
+            echo "NO_PERSISTENT_DATA=true" >> $GITHUB_ENV
+            exit 0
+          }
+          
+          # Switch to data-store branch and copy database
+          git checkout data-store
+          
+          if [ -f "database.sqlite" ]; then
+            echo "✅ Found persistent database"
+            cp database.sqlite ./data-store/database.sqlite
+            
+            # Get database info
+            echo "Database size: $(stat -f%z database.sqlite 2>/dev/null || stat -c%s database.sqlite) bytes"
+            echo "Database modified: $(stat -f%Sm database.sqlite 2>/dev/null || stat -c%y database.sqlite)"
+            
+            echo "PERSISTENT_DATABASE_FOUND=true" >> $GITHUB_ENV
+          else
+            echo "ℹ️ No persistent database found on data-store branch"
+            echo "PERSISTENT_DATABASE_FOUND=false" >> $GITHUB_ENV
+          fi
+          
+          # Switch back to main branch
+          git checkout main
+          
+          # Show what we have
+          echo "Data store directory contents:"
+          ls -la data-store/ || echo "data-store directory empty"
 
       - name: Initialize application and database
         run: |
@@ -178,6 +214,74 @@ jobs:
             --max-rfps 50
           
           echo "Reports generated successfully"
+
+      - name: Upload persistent database
+        if: always()
+        run: |
+          echo "Uploading updated database to data-store branch..."
+          
+          # Check if we have a database to upload
+          if [ ! -f "./data/database.sqlite" ]; then
+            echo "⚠️ No database found to upload"
+            exit 0
+          fi
+          
+          # Get database info
+          DB_SIZE=$(stat -f%z ./data/database.sqlite 2>/dev/null || stat -c%s ./data/database.sqlite)
+          echo "Database size: $DB_SIZE bytes"
+          
+          # Configure git
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Create or switch to data-store branch
+          if [ "$NO_PERSISTENT_DATA" = "true" ]; then
+            echo "Creating new data-store branch..."
+            git checkout --orphan data-store
+            git rm -rf .
+            echo "# RFP Mart Analyzer Persistent Data Storage" > README.md
+            echo "" >> README.md
+            echo "This branch stores the persistent SQLite database for the RFP analyzer." >> README.md
+            echo "The database is automatically updated by GitHub Actions workflows." >> README.md
+            echo "" >> README.md
+            echo "Last updated: $(date)" >> README.md
+          else
+            echo "Switching to existing data-store branch..."
+            git checkout data-store
+          fi
+          
+          # Copy the updated database
+          cp ./data/database.sqlite ./database.sqlite
+          
+          # Create a backup with timestamp
+          TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
+          cp ./database.sqlite "./database-backup-${TIMESTAMP}.sqlite"
+          
+          # Clean up old backups (keep last 10)
+          ls -t database-backup-*.sqlite 2>/dev/null | tail -n +11 | xargs rm -f || true
+          
+          # Add files and commit
+          git add database.sqlite database-backup-*.sqlite README.md
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No changes to commit to data-store branch"
+          else
+            git commit -m "📊 Update persistent database - $(date '+%Y-%m-%d %H:%M:%S')
+            
+            Database size: ${DB_SIZE} bytes
+            Run: ${{ github.run_number }}
+            
+            🤖 Generated with Claude Code
+            
+            Co-Authored-By: Claude <noreply@anthropic.com>"
+            
+            git push origin data-store
+            echo "✅ Database uploaded and committed to data-store branch"
+          fi
+          
+          # Switch back to main branch
+          git checkout main
 
       - name: Generate analysis report
         if: always()

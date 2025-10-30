@@ -15,6 +15,25 @@ declare global {
       pid: number;
       title: string;
       arch: string;
+      
+      // EventEmitter methods for process events
+      on(event: 'uncaughtException', listener: (error: Error) => void): this;
+      on(event: 'unhandledRejection', listener: (reason: any, promise: Promise<any>) => void): this;
+      on(event: 'SIGINT' | 'SIGTERM' | 'SIGHUP' | 'SIGBREAK', listener: () => void): this;
+      on(event: 'beforeExit' | 'exit', listener: (code: number) => void): this;
+      on(event: 'warning', listener: (warning: Error) => void): this;
+      on(event: string | symbol, listener: (...args: any[]) => void): this;
+      
+      once(event: 'uncaughtException', listener: (error: Error) => void): this;
+      once(event: 'unhandledRejection', listener: (reason: any, promise: Promise<any>) => void): this;
+      once(event: 'SIGINT' | 'SIGTERM' | 'SIGHUP' | 'SIGBREAK', listener: () => void): this;
+      once(event: 'beforeExit' | 'exit', listener: (code: number) => void): this;
+      once(event: 'warning', listener: (warning: Error) => void): this;
+      once(event: string | symbol, listener: (...args: any[]) => void): this;
+      
+      removeListener(event: string | symbol, listener: (...args: any[]) => void): this;
+      off(event: string | symbol, listener: (...args: any[]) => void): this;
+      emit(event: string | symbol, ...args: any[]): boolean;
     }
     
     interface ProcessEnv {

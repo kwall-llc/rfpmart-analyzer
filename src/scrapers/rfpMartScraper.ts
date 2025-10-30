@@ -1,5 +1,5 @@
 import { chromium, Browser, Page } from 'playwright';
-import path from 'path';
+import * as path from 'path';
 import fs from 'fs-extra';
 import { config } from '../config/environment';
 import { RFP_MART, FILE_HANDLING, ERROR_MESSAGES } from '../config/constants';

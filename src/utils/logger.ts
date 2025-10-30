@@ -1,5 +1,5 @@
 import winston from 'winston';
-import path from 'path';
+import * as path from 'path';
 import { config } from '../config/environment';
 import { LOGGING } from '../config/constants';
 

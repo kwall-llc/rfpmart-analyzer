@@ -1,5 +1,5 @@
 import fs from 'fs-extra';
-import path from 'path';
+import * as path from 'path';
 import StreamZip from 'node-stream-zip';
 import { FILE_HANDLING } from '../config/constants';
 import { processorLogger } from '../utils/logger';

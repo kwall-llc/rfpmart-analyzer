@@ -1,5 +1,5 @@
 import fs from 'fs-extra';
-import path from 'path';
+import * as path from 'path';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { FILE_HANDLING } from '../config/constants';

@@ -1,5 +1,5 @@
 import fs from 'fs-extra';
-import path from 'path';
+import * as path from 'path';
 import { DocumentExtractor, ExtractedDocument, ExtractionResult } from './documentExtractor';
 import { ZipHandler, ZipExtractionResult } from './zipHandler';
 import { processorLogger } from '../utils/logger';

@@ -102,7 +102,8 @@
       "Bash(claude plugin list)",
       "Bash(git push:*)",
       "Bash(git rm:*)",
-      "Bash(gh secret:*)"
+      "Bash(gh secret:*)",
+      "Bash(./scripts/test-local.sh:*)"
     ],
     "deny": [
       "Read(node_modules/)",

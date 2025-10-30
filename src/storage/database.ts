@@ -45,7 +45,7 @@ export interface AnalysisRecord {
 
 export class DatabaseManager {
   private db?: Database;
-  private dbPath: string;
+  public dbPath: string;
 
   constructor() {
     this.dbPath = config.storage.databasePath;
@@ -661,6 +661,229 @@ export class DatabaseManager {
         averageScore: 0,
         averageConfidence: 0
       };
+    }
+  }
+
+  /**
+   * Get a single RFP by ID
+   */
+  async getRFP(rfpId: string): Promise<RFPRecord | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const rfp = await this.db.get<RFPRecord>(
+        `SELECT * FROM ${DATABASE.TABLES.RFPS} WHERE id = ?`,
+        [rfpId]
+      );
+
+      return rfp || null;
+    } catch (error) {
+      databaseLogger.error('Failed to get RFP', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all RFPs
+   */
+  async getAllRFPs(): Promise<RFPRecord[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const rfps = await this.db.all<RFPRecord[]>(
+        `SELECT * FROM ${DATABASE.TABLES.RFPS} ORDER BY created_at DESC`
+      );
+
+      return rfps || [];
+    } catch (error) {
+      databaseLogger.error('Failed to get all RFPs', { 
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Add a new RFP record
+   */
+  async addRFP(rfp: RFPRecord): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      await this.db.run(
+        `INSERT OR IGNORE INTO ${DATABASE.TABLES.RFPS} 
+         (id, title, due_date, posted_date, download_date, file_path, institution, score, recommendation, analysis_complete)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          rfp.id,
+          rfp.title,
+          rfp.dueDate,
+          rfp.postedDate,
+          rfp.downloadDate,
+          rfp.filePath,
+          rfp.institution,
+          rfp.score,
+          rfp.recommendation,
+          rfp.analysisComplete ? 1 : 0
+        ]
+      );
+
+      databaseLogger.debug('RFP added successfully', { rfpId: rfp.id });
+    } catch (error) {
+      databaseLogger.error('Failed to add RFP', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId: rfp.id,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update an existing RFP record
+   */
+  async updateRFP(rfpId: string, updates: Partial<RFPRecord>): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const setClause = [];
+      const values = [];
+
+      if (updates.title !== undefined) {
+        setClause.push('title = ?');
+        values.push(updates.title);
+      }
+      if (updates.dueDate !== undefined) {
+        setClause.push('due_date = ?');
+        values.push(updates.dueDate);
+      }
+      if (updates.postedDate !== undefined) {
+        setClause.push('posted_date = ?');
+        values.push(updates.postedDate);
+      }
+      if (updates.downloadDate !== undefined) {
+        setClause.push('download_date = ?');
+        values.push(updates.downloadDate);
+      }
+      if (updates.filePath !== undefined) {
+        setClause.push('file_path = ?');
+        values.push(updates.filePath);
+      }
+      if (updates.institution !== undefined) {
+        setClause.push('institution = ?');
+        values.push(updates.institution);
+      }
+      if (updates.score !== undefined) {
+        setClause.push('score = ?');
+        values.push(updates.score);
+      }
+      if (updates.recommendation !== undefined) {
+        setClause.push('recommendation = ?');
+        values.push(updates.recommendation);
+      }
+      if (updates.analysisComplete !== undefined) {
+        setClause.push('analysis_complete = ?');
+        values.push(updates.analysisComplete ? 1 : 0);
+      }
+
+      if (setClause.length === 0) {
+        return; // No updates to make
+      }
+
+      // Always update the updated_at timestamp
+      setClause.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(rfpId);
+
+      await this.db.run(
+        `UPDATE ${DATABASE.TABLES.RFPS} SET ${setClause.join(', ')} WHERE id = ?`,
+        values
+      );
+
+      databaseLogger.debug('RFP updated successfully', { rfpId });
+    } catch (error) {
+      databaseLogger.error('Failed to update RFP', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all analyses for all RFPs
+   */
+  async getAllAnalyses(): Promise<AnalysisRecord[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const analyses = await this.db.all<AnalysisRecord[]>(
+        `SELECT * FROM ${DATABASE.TABLES.ANALYSIS_RESULTS} ORDER BY created_at DESC`
+      );
+
+      return analyses || [];
+    } catch (error) {
+      databaseLogger.error('Failed to get all analyses', { 
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific analysis
+   */
+  async getAnalysis(rfpId: string, analysisType: string): Promise<AnalysisRecord | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const analysis = await this.db.get<AnalysisRecord>(
+        `SELECT * FROM ${DATABASE.TABLES.ANALYSIS_RESULTS} WHERE rfp_id = ? AND analysis_type = ?`,
+        [rfpId, analysisType]
+      );
+
+      return analysis || null;
+    } catch (error) {
+      databaseLogger.error('Failed to get analysis', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId,
+        analysisType,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Add a new analysis record
+   */
+  async addAnalysis(analysis: AnalysisRecord): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      await this.db.run(
+        `INSERT OR IGNORE INTO ${DATABASE.TABLES.ANALYSIS_RESULTS} 
+         (rfp_id, analysis_type, score, details)
+         VALUES (?, ?, ?, ?)`,
+        [
+          analysis.rfpId,
+          analysis.analysisType,
+          analysis.score,
+          analysis.details
+        ]
+      );
+
+      databaseLogger.debug('Analysis added successfully', { 
+        rfpId: analysis.rfpId, 
+        type: analysis.analysisType 
+      });
+    } catch (error) {
+      databaseLogger.error('Failed to add analysis', { 
+        error: error instanceof Error ? error.message : String(error),
+        rfpId: analysis.rfpId,
+        analysisType: analysis.analysisType,
+      });
+      throw error;
     }
   }
 

@@ -37,26 +37,10 @@ run_test() {
     fi
 }
 
-# 1. Dependency Check
-run_test "Dependency Installation" "npm ci"
-
-# 2. TypeScript Compilation
-run_test "TypeScript Build" "npm run build"
-
-# 3. Linting (non-blocking)
-echo ""
-echo -e "${BLUE}Testing: Code Linting${NC}"
-echo "----------------------------------------"
-if npm run lint 2>/dev/null; then
-    echo -e "${GREEN}✅ PASS: Linting${NC}"
-else
-    echo -e "${YELLOW}⚠️  WARN: Linting issues found (non-blocking)${NC}"
-fi
-
-# 4. Environment Configuration Test
-run_test "Environment Configuration" '
+# Test function definitions
+test_environment_config() {
     # Create test environment
-    cat > .env.test << EOF
+    cat > .env.test << 'ENVEOF'
 RFPMART_USERNAME=test@example.com
 RFPMART_PASSWORD=test-password
 RFP_CATEGORY_URL=https://www.rfpmart.com/web-design-and-development-rfp-government-contract.html
@@ -76,7 +60,7 @@ PROJECT_TYPE_KEYWORDS=redesign,migration
 TECHNICAL_KEYWORDS=responsive,mobile
 LOCATION_PREFERRED=united states
 LOCATION_ACCEPTABLE=canada
-EOF
+ENVEOF
     
     # Test configuration loading
     ENV_FILE=.env.test node -e "
@@ -90,10 +74,9 @@ EOF
     
     # Cleanup
     rm -f .env.test
-'
+}
 
-# 5. Database Operations Test
-run_test "Database Operations" '
+test_database_operations() {
     mkdir -p test-db
     
     DATABASE_PATH=./test-db/test.sqlite node -e "
@@ -126,14 +109,13 @@ run_test "Database Operations" '
     "
     
     rm -rf test-db
-'
+}
 
-# 6. Application Initialization Test
-run_test "Application Initialization" '
+test_application_initialization() {
     # Create test environment
     mkdir -p test-data/rfps test-data/reports test-logs
     
-    cat > .env << EOF
+    cat > .env << 'APPEOF'
 RFPMART_USERNAME=test@example.com
 RFPMART_PASSWORD=test-password
 RFP_CATEGORY_URL=https://www.rfpmart.com/web-design-and-development-rfp-government-contract.html
@@ -153,7 +135,7 @@ PROJECT_TYPE_KEYWORDS=redesign,migration
 TECHNICAL_KEYWORDS=responsive,mobile
 LOCATION_PREFERRED=united states
 LOCATION_ACCEPTABLE=canada
-EOF
+APPEOF
     
     # Test application startup (with timeout)
     timeout 30s npm start status > /dev/null 2>&1 || true
@@ -167,7 +149,32 @@ EOF
     
     # Cleanup
     rm -rf test-data test-logs .env
-'
+}
+
+# 1. Dependency Check
+run_test "Dependency Installation" "npm ci"
+
+# 2. TypeScript Compilation
+run_test "TypeScript Build" "npm run build"
+
+# 3. Linting (non-blocking)
+echo ""
+echo -e "${BLUE}Testing: Code Linting${NC}"
+echo "----------------------------------------"
+if npm run lint 2>/dev/null; then
+    echo -e "${GREEN}✅ PASS: Linting${NC}"
+else
+    echo -e "${YELLOW}⚠️  WARN: Linting issues found (non-blocking)${NC}"
+fi
+
+# 4. Environment Configuration Test
+run_test "Environment Configuration" "test_environment_config"
+
+# 5. Database Operations Test
+run_test "Database Operations" "test_database_operations"
+
+# 6. Application Initialization Test
+run_test "Application Initialization" "test_application_initialization"
 
 # 7. Security Check
 echo ""

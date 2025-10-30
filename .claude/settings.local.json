@@ -105,7 +105,10 @@
       "Bash(gh secret:*)",
       "Bash(./scripts/test-local.sh:*)",
       "Bash(NODE_ENV=production npm run build)",
-      "Bash(npm ci:*)"
+      "Bash(npm ci:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(timeout 60s npm start run -- --dry-run)",
+      "Bash(gtimeout 60s npm start run -- --dry-run)"
     ],
     "deny": [
       "Read(node_modules/)",

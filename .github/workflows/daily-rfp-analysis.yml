@@ -56,6 +56,13 @@ jobs:
           echo "LOG_LEVEL=info" >> .env
           echo "LOG_FILE=./logs/rfpmart-analyzer.log" >> .env
           echo "NODE_ENV=production" >> .env
+          echo "HIGHER_ED_KEYWORDS=university,college,school,education,academic,campus,student,institution,district,system" >> .env
+          echo "CMS_KEYWORDS_PREFERRED=drupal,wordpress,modern campus" >> .env
+          echo "CMS_KEYWORDS_ACCEPTABLE=joomla,craft,contentful,strapi,sitecore,umbraco" >> .env
+          echo "PROJECT_TYPE_KEYWORDS=redesign,migration,rebuild,modernize,refresh,overhaul,revamp" >> .env
+          echo "TECHNICAL_KEYWORDS=responsive,mobile,accessibility,wcag,ada,508,mobile-first,progressive" >> .env
+          echo "LOCATION_PREFERRED=united states,usa,america,north america" >> .env
+          echo "LOCATION_ACCEPTABLE=canada,remote,virtual,distributed,online" >> .env
 
       - name: Create data directories
         run: |

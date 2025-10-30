@@ -205,10 +205,18 @@ export class RFPMartScraper {
         timeout: RFP_MART.WAIT_TIMES.NAVIGATION,
       });
 
-      // Wait for RFP listings to load
-      await this.page.waitForSelector(RFP_MART.SELECTORS.RFP_LISTING.CONTAINER, {
-        timeout: RFP_MART.WAIT_TIMES.PAGE_LOAD,
-      });
+      // Wait for RFP listings to load - try multiple possible selectors
+      try {
+        await this.page.waitForSelector(RFP_MART.SELECTORS.RFP_LISTING.CONTAINER, {
+          timeout: RFP_MART.WAIT_TIMES.PAGE_LOAD,
+        });
+      } catch (error) {
+        // Fallback to alternative selectors if the primary fails
+        scraperLogger.warn('Primary selector failed, trying fallback selectors');
+        await this.page.waitForSelector('.rfp-list, .contract-list, .opportunity-list, #home, .content, body', {
+          timeout: RFP_MART.WAIT_TIMES.PAGE_LOAD,
+        });
+      }
 
       scraperLogger.info('Successfully navigated to RFP listing page');
 

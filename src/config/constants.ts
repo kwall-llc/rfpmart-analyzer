@@ -5,13 +5,13 @@
 // RFP Mart website selectors and URLs
 export const RFP_MART = {
   BASE_URL: 'https://www.rfpmart.com',
-  LOGIN_URL: 'https://www.rfpmart.com/login',
+  LOGIN_URL: 'https://www.rfpmart.com/userlogin.html',
   SELECTORS: {
     LOGIN: {
-      USERNAME: 'input[name="email"], input[name="username"]',
-      PASSWORD: 'input[name="password"]',
-      SUBMIT: 'button[type="submit"], input[type="submit"]',
-      ERROR: '.error, .alert-danger, .invalid-feedback',
+      USERNAME: 'input[type="email"]',
+      PASSWORD: 'input[type="password"]',
+      SUBMIT: 'input[type="submit"]',
+      ERROR: '.error, .alert-danger, .invalid-feedback, .error-message',
     },
     RFP_LISTING: {
       CONTAINER: '.rfp-list, .contract-list, .opportunity-list',
@@ -32,9 +32,9 @@ export const RFP_MART = {
     },
   },
   WAIT_TIMES: {
-    NAVIGATION: 5000,
-    DOWNLOAD: 30000,
-    PAGE_LOAD: 10000,
+    NAVIGATION: 30000,     // Increased for slow site
+    DOWNLOAD: 60000,       // Increased for large files
+    PAGE_LOAD: 30000,      // Increased for slow loading
   },
 } as const;
 

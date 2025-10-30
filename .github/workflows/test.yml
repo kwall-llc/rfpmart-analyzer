@@ -134,15 +134,27 @@ jobs:
         run: |
           echo "Testing database operations..."
           
-          # Create test environment
-          mkdir -p test-db
+          # Create test environment with required variables
+          cat > .env << EOF
+          RFPMART_USERNAME=test@example.com
+          RFPMART_PASSWORD=test-password
+          RFP_CATEGORY_URL=https://www.rfpmart.com/web-design-and-development-rfp-government-contract.html
+          MIN_BUDGET_ACCEPTABLE=50000
+          MIN_BUDGET_PREFERRED=100000
+          DATA_DIRECTORY=./test-db
+          REPORTS_DIRECTORY=./test-db/reports
+          RFPS_DIRECTORY=./test-db/rfps
+          DATABASE_PATH=./test-db/test.sqlite
+          LOG_LEVEL=info
+          LOG_FILE=./test-db/logs/rfpmart-analyzer.log
+          NODE_ENV=test
+          EOF
+          
+          # Create test directories
+          mkdir -p test-db/reports test-db/rfps test-db/logs
           
           node -e "
             const { DatabaseManager } = require('./dist/storage/database.js');
-            const path = require('path');
-            
-            // Override config for testing
-            process.env.DATABASE_PATH = './test-db/test.sqlite';
             
             async function testDatabase() {
               const db = new DatabaseManager();
@@ -175,13 +187,17 @@ jobs:
           "
           
           # Cleanup
-          rm -rf test-db
+          rm -rf test-db .env
 
       - name: Test environment variable parsing
         run: |
           echo "Testing environment variable parsing..."
           
           node -e "
+            // Set required environment variables
+            process.env.RFPMART_USERNAME = 'test@example.com';
+            process.env.RFPMART_PASSWORD = 'test-password';
+            
             // Test keyword parsing
             process.env.HIGHER_ED_KEYWORDS = 'university,college,school';
             process.env.CMS_KEYWORDS_PREFERRED = 'drupal,wordpress';

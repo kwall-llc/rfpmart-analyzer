@@ -306,8 +306,8 @@ ${goodRFPs.slice(0, 3).map(rfp => `- **${rfp.rfpId}** (${rfp.fitScore}/100) - ${
 ` : ''}
 
 ### 📁 View Full Results
-- [📊 Complete Dashboard](https://github.com/` + '${{ github.repository }}' + `/blob/main/reports/README.md)
-- [📋 All RFPs](https://github.com/` + '${{ github.repository }}' + `/blob/main/reports/rfps/README.md)
+- [📊 Complete Dashboard](https://github.com/GITHUB_REPOSITORY_PLACEHOLDER/blob/main/reports/README.md)
+- [📋 All RFPs](https://github.com/GITHUB_REPOSITORY_PLACEHOLDER/blob/main/reports/rfps/README.md)
 
 *Analysis completed at ${new Date().toLocaleString()}*
 `;

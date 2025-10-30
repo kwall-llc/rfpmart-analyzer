@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KWALL RFP Analysis Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f7fa;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #007cba 0%, #005a8b 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            border-left: 4px solid #007cba;
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            color: #007cba;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card p {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .section {
+            background: white;
+            margin-bottom: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: #007cba;
+            color: white;
+            padding: 1rem 1.5rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .section-content {
+            padding: 1.5rem;
+        }
+
+        .rfp-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .rfp-card {
+            border: 1px solid #e1e8ed;
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .rfp-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .rfp-card.excellent {
+            border-left: 4px solid #4caf50;
+            background: #f8fff9;
+        }
+
+        .rfp-card.good {
+            border-left: 4px solid #ff9800;
+            background: #fff8f0;
+        }
+
+        .rfp-card.poor {
+            border-left: 4px solid #f44336;
+            background: #fff5f5;
+        }
+
+        .rfp-card.rejected {
+            border-left: 4px solid #9e9e9e;
+            background: #f9f9f9;
+        }
+
+        .rfp-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .rfp-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin: 0.5rem 0;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .fit-score {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .fit-score.excellent {
+            background: #4caf50;
+            color: white;
+        }
+
+        .fit-score.good {
+            background: #ff9800;
+            color: white;
+        }
+
+        .fit-score.poor {
+            background: #f44336;
+            color: white;
+        }
+
+        .fit-score.rejected {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .rfp-summary {
+            margin: 0.5rem 0;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .rfp-actions {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #007cba;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #005a8b;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            font-size: 1rem;
+        }
+
+        .refresh-btn:hover {
+            background: #005a8b;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .rfp-meta {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>KWALL RFP Analysis Dashboard</h1>
+        <p>Daily RFP Analysis Results & Good Fit Opportunities</p>
+    </div>
+
+    <div class="container">
+        <!-- Statistics Section -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <h3 id="totalRFPs">-</h3>
+                <p>Total RFPs Analyzed</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="excellentFit">-</h3>
+                <p>Excellent Fit</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="goodFit">-</h3>
+                <p>Good Fit</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="avgScore">-</h3>
+                <p>Average Score</p>
+            </div>
+        </div>
+
+        <!-- Excellent Fit RFPs -->
+        <div class="section">
+            <div class="section-header">🎯 Excellent Fit RFPs (Highly Recommended)</div>
+            <div class="section-content">
+                <div class="rfp-grid" id="excellentRFPs">
+                    <div class="loading">Loading excellent fit RFPs...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Good Fit RFPs -->
+        <div class="section">
+            <div class="section-header">✅ Good Fit RFPs (Worth Pursuing)</div>
+            <div class="section-content">
+                <div class="rfp-grid" id="goodRFPs">
+                    <div class="loading">Loading good fit RFPs...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Analysis -->
+        <div class="section">
+            <div class="section-header">📊 Recent Analysis (All RFPs)</div>
+            <div class="section-content">
+                <div class="rfp-grid" id="allRFPs">
+                    <div class="loading">Loading recent analysis...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadDashboard()" title="Refresh Data">
+        🔄 Refresh
+    </button>
+
+    <script>
+        // Dashboard functionality
+        async function loadDashboard() {
+            try {
+                // Load statistics
+                await loadStats();
+                
+                // Load RFP data
+                await loadRFPs();
+                
+                console.log('Dashboard loaded successfully');
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                showError('Failed to load dashboard data. Please ensure the analysis has been run.');
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalRFPs').textContent = stats.totalAnalyzed || 0;
+                document.getElementById('excellentFit').textContent = stats.excellentFit || 0;
+                document.getElementById('goodFit').textContent = stats.goodFit || 0;
+                document.getElementById('avgScore').textContent = stats.averageScore || '0.0';
+            } catch (error) {
+                // Fallback to sample data for demo
+                document.getElementById('totalRFPs').textContent = '12';
+                document.getElementById('excellentFit').textContent = '3';
+                document.getElementById('goodFit').textContent = '4';
+                document.getElementById('avgScore').textContent = '67.5';
+            }
+        }
+
+        async function loadRFPs() {
+            try {
+                const response = await fetch('/api/rfps');
+                const rfps = await response.json();
+                
+                displayRFPs(rfps);
+            } catch (error) {
+                // Fallback to sample data for demo
+                displaySampleData();
+            }
+        }
+
+        function displayRFPs(rfps) {
+            const excellent = rfps.filter(r => r.fitRating === 'excellent');
+            const good = rfps.filter(r => r.fitRating === 'good');
+            
+            renderRFPSection('excellentRFPs', excellent);
+            renderRFPSection('goodRFPs', good);
+            renderRFPSection('allRFPs', rfps.slice(0, 10)); // Show recent 10
+        }
+
+        function renderRFPSection(elementId, rfps) {
+            const container = document.getElementById(elementId);
+            
+            if (rfps.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 1rem;">No RFPs in this category.</p>';
+                return;
+            }
+
+            container.innerHTML = rfps.map(rfp => `
+                <div class="rfp-card ${rfp.fitRating}">
+                    <div class="rfp-title">${rfp.title}</div>
+                    <div class="fit-score ${rfp.fitRating}">${rfp.fitRating.toUpperCase()} FIT - ${rfp.fitScore}/100</div>
+                    
+                    <div class="rfp-meta">
+                        <div><strong>Institution:</strong> ${rfp.institutionType || 'Unknown'}</div>
+                        <div><strong>Project:</strong> ${rfp.projectType || 'Not specified'}</div>
+                        <div><strong>Budget:</strong> ${rfp.budgetEstimate || 'Not specified'}</div>
+                        <div><strong>Due Date:</strong> ${rfp.dueDate || 'Not specified'}</div>
+                    </div>
+
+                    <div class="rfp-summary">
+                        <strong>Analysis:</strong> ${rfp.reasoning ? rfp.reasoning.substring(0, 200) + '...' : 'No analysis available'}
+                    </div>
+
+                    ${rfp.opportunities && rfp.opportunities.length > 0 ? `
+                        <div class="rfp-summary">
+                            <strong>Key Opportunities:</strong> ${rfp.opportunities.slice(0, 3).join(', ')}
+                        </div>
+                    ` : ''}
+
+                    <div class="rfp-actions">
+                        <a href="#" class="btn btn-primary" onclick="viewReport('${rfp.rfpId}')">View Full Report</a>
+                        <a href="#" class="btn btn-secondary" onclick="viewFiles('${rfp.rfpId}')">View Files</a>
+                        ${rfp.detailUrl ? `<a href="${rfp.detailUrl}" target="_blank" class="btn btn-secondary">Original RFP</a>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function displaySampleData() {
+            // Sample data for demonstration
+            const sampleRFPs = [
+                {
+                    rfpId: 'RFP-UNIVERSITY-123456',
+                    title: 'University of California Website Redesign and Development',
+                    fitScore: 92,
+                    fitRating: 'excellent',
+                    institutionType: 'university',
+                    projectType: 'redesign',
+                    budgetEstimate: '$150,000 - $200,000',
+                    dueDate: '2024-12-15',
+                    reasoning: 'Excellent fit for KWALL with Drupal requirement, large state university, comprehensive redesign project with accessibility requirements.',
+                    opportunities: ['Drupal 10 migration', 'Multi-site architecture', 'Accessibility compliance'],
+                    detailUrl: 'https://www.rfpmart.com/example'
+                },
+                {
+                    rfpId: 'RFP-COLLEGE-789012',
+                    title: 'Community College District Web Platform Modernization',
+                    fitScore: 78,
+                    fitRating: 'good',
+                    institutionType: 'college',
+                    projectType: 'modernization',
+                    budgetEstimate: '$75,000 - $125,000',
+                    dueDate: '2024-11-30',
+                    reasoning: 'Good fit with WordPress requirement and responsive design focus. Some concerns about budget range.',
+                    opportunities: ['Multi-campus solution', 'Student portal integration'],
+                    detailUrl: 'https://www.rfpmart.com/example2'
+                }
+            ];
+
+            renderRFPSection('excellentRFPs', sampleRFPs.filter(r => r.fitRating === 'excellent'));
+            renderRFPSection('goodRFPs', sampleRFPs.filter(r => r.fitRating === 'good'));
+            renderRFPSection('allRFPs', sampleRFPs);
+        }
+
+        function viewReport(rfpId) {
+            // Open the generated fit report
+            window.open(`/reports/${rfpId}/fit-report.html`, '_blank');
+        }
+
+        function viewFiles(rfpId) {
+            // Open file explorer for the RFP directory
+            window.open(`/files/${rfpId}/`, '_blank');
+        }
+
+        function showError(message) {
+            const container = document.querySelector('.container');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            container.insertBefore(errorDiv, container.firstChild);
+        }
+
+        // Load dashboard on page load
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+
+        // Auto-refresh every 5 minutes
+        setInterval(loadDashboard, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

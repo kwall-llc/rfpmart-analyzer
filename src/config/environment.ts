@@ -66,6 +66,33 @@ export interface EnvironmentConfig {
     notificationEmail?: string;
   };
 
+  // AI Configuration
+  ai: {
+    provider: string;
+    openai?: {
+      apiKey: string;
+      model: string;
+    };
+    anthropic?: {
+      apiKey: string;
+      model: string;
+    };
+    azure?: {
+      endpoint: string;
+      apiKey: string;
+      model: string;
+    };
+    thresholds: {
+      excellent: number;
+      good: number;
+      poor: number;
+    };
+    cleanup: {
+      poorFits: boolean;
+      rejected: boolean;
+    };
+  };
+
   // Development
   nodeEnv: string;
 }
@@ -155,6 +182,32 @@ export const config: EnvironmentConfig = {
       pass: getOptionalEnv('SMTP_PASS'),
     },
     notificationEmail: getOptionalEnv('NOTIFICATION_EMAIL'),
+  },
+
+  ai: {
+    provider: getOptionalEnv('AI_PROVIDER', 'openai'),
+    openai: {
+      apiKey: getOptionalEnv('AI_OPENAI_API_KEY', ''),
+      model: getOptionalEnv('AI_OPENAI_MODEL', 'gpt-4'),
+    },
+    anthropic: {
+      apiKey: getOptionalEnv('AI_ANTHROPIC_API_KEY', ''),
+      model: getOptionalEnv('AI_ANTHROPIC_MODEL', 'claude-3-sonnet-20240229'),
+    },
+    azure: {
+      endpoint: getOptionalEnv('AI_AZURE_ENDPOINT', ''),
+      apiKey: getOptionalEnv('AI_AZURE_API_KEY', ''),
+      model: getOptionalEnv('AI_AZURE_MODEL', 'gpt-4'),
+    },
+    thresholds: {
+      excellent: getNumericEnv('AI_FIT_THRESHOLD_EXCELLENT', 80),
+      good: getNumericEnv('AI_FIT_THRESHOLD_GOOD', 60),
+      poor: getNumericEnv('AI_FIT_THRESHOLD_POOR', 25),
+    },
+    cleanup: {
+      poorFits: getBooleanEnv('AI_CLEANUP_POOR_FITS', true),
+      rejected: getBooleanEnv('AI_CLEANUP_REJECTED', true),
+    },
   },
 
   nodeEnv: getOptionalEnv('NODE_ENV', 'development'),

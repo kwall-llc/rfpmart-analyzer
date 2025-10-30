@@ -235,9 +235,30 @@ export class RFPMartScraper {
    */
   private async extractRFPData(element: any, index: number): Promise<RFPListing | null> {
     try {
-      // Extract title
+      // Extract title - try multiple approaches
+      let title = null;
+      
+      // First, try to find a title element within the current element
       const titleElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.TITLE);
-      const title = titleElement ? await titleElement.textContent() : null;
+      if (titleElement) {
+        title = await titleElement.textContent();
+      }
+      
+      // If that didn't work, check if the element itself is a title element (h4)
+      if (!title) {
+        const tagName = await element.evaluate((el: any) => el.tagName?.toLowerCase());
+        if (tagName === 'h4') {
+          title = await element.textContent();
+        }
+      }
+      
+      // If still no title, try to get text from a link within the element
+      if (!title) {
+        const linkElement = await element.$('a[href*="usa"][href*="rfp.html"]');
+        if (linkElement) {
+          title = await linkElement.textContent();
+        }
+      }
 
       if (!title) {
         scraperLogger.warn(`No title found for RFP item ${index}`);
@@ -251,9 +272,31 @@ export class RFPMartScraper {
       const dueDateElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.DUE_DATE);
       const dueDate = dueDateElement ? await dueDateElement.textContent() : null;
 
-      // Extract download link
+      // Extract download link - try multiple approaches
+      let downloadUrl = null;
+      
+      // First, try the generic download link selector
       const downloadElement = await element.$(RFP_MART.SELECTORS.RFP_LISTING.DOWNLOAD_LINK);
-      const downloadUrl = downloadElement ? await downloadElement.getAttribute('href') : null;
+      if (downloadElement) {
+        downloadUrl = await downloadElement.getAttribute('href');
+      }
+      
+      // If no download link found, try specific patterns
+      if (!downloadUrl) {
+        // Try files.rfpmart.com download links
+        const filesLinkElement = await element.$('a[href*="files.rfpmart.com"]');
+        if (filesLinkElement) {
+          downloadUrl = await filesLinkElement.getAttribute('href');
+        }
+      }
+      
+      // If still no download link, try the RFP detail page link
+      if (!downloadUrl) {
+        const rfpLinkElement = await element.$('a[href*="usa"][href*="rfp.html"]');
+        if (rfpLinkElement) {
+          downloadUrl = await rfpLinkElement.getAttribute('href');
+        }
+      }
 
       // Extract RFP ID (try multiple approaches)
       let id = '';

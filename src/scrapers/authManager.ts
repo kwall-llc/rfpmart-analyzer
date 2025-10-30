@@ -48,10 +48,11 @@ export class AuthManager {
       }
 
       // Submit login form
-      await Promise.all([
-        this.page.waitForNavigation({ waitUntil: 'networkidle' }),
-        this.page.click(RFP_MART.SELECTORS.LOGIN.SUBMIT),
-      ]);
+      await this.page.click(RFP_MART.SELECTORS.LOGIN.SUBMIT);
+      
+      // Wait longer for slow site to process login (60+ seconds needed)
+      scraperLogger.info('Waiting 60 seconds for slow site to process login...');
+      await this.page.waitForTimeout(60000);
 
       // Check for login errors
       const errorElement = await this.page.$(RFP_MART.SELECTORS.LOGIN.ERROR);
@@ -100,6 +101,16 @@ export class AuthManager {
    */
   async verifyAuthentication(): Promise<boolean> {
     try {
+      // Check for the specific welcome message that indicates successful login
+      const bodyText = await this.page.$eval('body', el => el.textContent || '');
+      const hasWelcomeMessage = bodyText.includes('Welcome') && bodyText.includes('KWALL');
+      
+      if (hasWelcomeMessage) {
+        scraperLogger.info('Authentication verified: Welcome KWALL message found');
+        this.authState.isAuthenticated = true;
+        return true;
+      }
+
       // Check for user-specific elements that indicate we're logged in
       const authIndicators = [
         'a[href*="logout"]',
@@ -113,6 +124,7 @@ export class AuthManager {
       for (const selector of authIndicators) {
         const element = await this.page.$(selector);
         if (element) {
+          scraperLogger.info(`Authentication verified: Found element ${selector}`);
           this.authState.isAuthenticated = true;
           return true;
         }
@@ -121,6 +133,7 @@ export class AuthManager {
       // Check if we're redirected to login page
       const currentUrl = this.page.url();
       if (currentUrl.includes('login') || currentUrl.includes('signin')) {
+        scraperLogger.warn('Authentication failed: Redirected to login page');
         this.authState.isAuthenticated = false;
         return false;
       }
@@ -128,14 +141,15 @@ export class AuthManager {
       // Check page title for login indicators
       const title = await this.page.title();
       if (title.toLowerCase().includes('login') || title.toLowerCase().includes('sign in')) {
+        scraperLogger.warn('Authentication failed: Login page title detected');
         this.authState.isAuthenticated = false;
         return false;
       }
 
-      // If no clear indicators, assume we're authenticated
-      // (some sites don't have obvious auth indicators)
-      this.authState.isAuthenticated = true;
-      return true;
+      // If no welcome message and no auth indicators, likely not authenticated
+      scraperLogger.warn('Authentication uncertain: No clear indicators found');
+      this.authState.isAuthenticated = false;
+      return false;
 
     } catch (error) {
       scraperLogger.warn('Failed to verify authentication status', { error: error instanceof Error ? error.message : String(error) });

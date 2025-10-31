@@ -19,6 +19,9 @@ on:
 env:
   NODE_ENV: production
 
+permissions:
+  contents: write  # Allow pushing to repository
+
 jobs:
   rfp-analysis:
     runs-on: ubuntu-latest
@@ -506,6 +509,18 @@ jobs:
               body: issueBody,
               labels: ['rfp', 'high-priority', 'automated']
             });
+
+      - name: Upload artifacts (backup)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rfp-analysis-results-${{ github.run_number }}
+          path: |
+            ./data/
+            ./logs/
+            ./reports/
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Cleanup on failure
         if: failure()

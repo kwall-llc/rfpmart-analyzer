@@ -142,10 +142,10 @@ export const config: EnvironmentConfig = {
   },
 
   storage: {
-    dataDirectory: getOptionalEnv('DATA_DIRECTORY', './data'),
-    reportsDirectory: getOptionalEnv('REPORTS_DIRECTORY', './data/reports'),
-    rfpsDirectory: getOptionalEnv('RFPS_DIRECTORY', './data/rfps'),
-    databasePath: getOptionalEnv('DATABASE_PATH', './data/database.sqlite'),
+    dataDirectory: getOptionalEnv('DATA_DIRECTORY', process.env.GITHUB_ACTIONS ? path.resolve('./data') : './data'),
+    reportsDirectory: getOptionalEnv('REPORTS_DIRECTORY', process.env.GITHUB_ACTIONS ? path.resolve('./data/reports') : './data/reports'),
+    rfpsDirectory: getOptionalEnv('RFPS_DIRECTORY', process.env.GITHUB_ACTIONS ? path.resolve('./data/rfps') : './data/rfps'),
+    databasePath: getOptionalEnv('DATABASE_PATH', process.env.GITHUB_ACTIONS ? path.resolve('./data/database.sqlite') : './data/database.sqlite'),
   },
 
   logging: {

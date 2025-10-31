@@ -413,18 +413,29 @@ export class RFPMartScraper {
 
       scraperLogger.info(`Found download link: ${downloadUrl}`, { rfpId: rfp.id });
 
-      // Create directory for this RFP
+      // Create directory for this RFP with absolute path resolution
       const rfpDir = this.createRFPDirectory(rfp);
-      await fs.ensureDir(rfpDir);
+      const absoluteRfpDir = path.resolve(rfpDir);
+      
+      // Ensure directory creation with proper permissions
+      await fs.ensureDir(absoluteRfpDir, { mode: 0o755 });
       
       // Verify directory was created
-      const dirExists = await fs.pathExists(rfpDir);
+      const dirExists = await fs.pathExists(absoluteRfpDir);
       if (!dirExists) {
-        scraperLogger.error(`Failed to create RFP directory: ${rfpDir}`);
+        scraperLogger.error(`Failed to create RFP directory: ${absoluteRfpDir}`, {
+          originalPath: rfpDir,
+          workingDirectory: process.cwd(),
+          nodeEnv: process.env.NODE_ENV
+        });
         return false;
       }
       
-      scraperLogger.info(`Created RFP directory: ${rfpDir}`, { rfpId: rfp.id });
+      scraperLogger.info(`Created RFP directory: ${absoluteRfpDir}`, { 
+        rfpId: rfp.id,
+        relativePath: rfpDir,
+        permissions: '0o755'
+      });
 
       // Set up download listener
       const downloadPromise = this.page.waitForEvent('download', { timeout: FILE_HANDLING.DOWNLOAD_TIMEOUT });
@@ -435,28 +446,89 @@ export class RFPMartScraper {
       // Wait for download to start
       const download = await downloadPromise;
       
-      // Get suggested filename
+      // Get suggested filename and create absolute download path
       const suggestedFilename = download.suggestedFilename();
-      const downloadPath = path.join(rfpDir, suggestedFilename);
+      const downloadPath = path.resolve(absoluteRfpDir, suggestedFilename);
       
       // Ensure the directory still exists just before saving
-      await fs.ensureDir(path.dirname(downloadPath));
+      await fs.ensureDir(path.dirname(downloadPath), { mode: 0o755 });
       
-      scraperLogger.info(`Attempting to save download to: ${downloadPath}`, { rfpId: rfp.id });
+      scraperLogger.info(`Attempting to save download to: ${downloadPath}`, { 
+        rfpId: rfp.id,
+        suggestedFilename,
+        absoluteDir: absoluteRfpDir,
+        workingDir: process.cwd(),
+        isGitHubActions: !!process.env.GITHUB_ACTIONS
+      });
 
-      // Save the download to the RFP directory
+      // Save the download to the RFP directory with enhanced error handling
       try {
         await download.saveAs(downloadPath);
+        
+        // Verify the file was actually saved
+        const fileExists = await fs.pathExists(downloadPath);
+        if (!fileExists) {
+          throw new Error(`File was not created at expected location: ${downloadPath}`);
+        }
+        
+        const stats = await fs.stat(downloadPath);
+        scraperLogger.info(`File saved successfully`, {
+          rfpId: rfp.id,
+          path: downloadPath,
+          size: stats.size,
+          mode: `0o${(stats.mode & parseInt('777', 8)).toString(8)}`
+        });
+        
       } catch (error) {
-        scraperLogger.error(`Failed to save download: ${error instanceof Error ? error.message : String(error)}`, {
+        const errorContext = {
           rfpId: rfp.id,
           downloadPath,
-          rfpDir,
+          absoluteRfpDir,
           suggestedFilename,
-          dirExists: await fs.pathExists(rfpDir),
-          parentDirExists: await fs.pathExists(path.dirname(downloadPath))
-        });
-        throw error;
+          dirExists: await fs.pathExists(absoluteRfpDir),
+          parentDirExists: await fs.pathExists(path.dirname(downloadPath)),
+          workingDirectory: process.cwd(),
+          userId: process.getuid?.(),
+          groupId: process.getgid?.(),
+          nodeEnv: process.env.NODE_ENV,
+          githubActions: process.env.GITHUB_ACTIONS,
+          runnerWorkspace: process.env.GITHUB_WORKSPACE,
+          error: error instanceof Error ? error.message : String(error)
+        };
+        
+        scraperLogger.error(`Failed to save download with enhanced diagnostics`, errorContext);
+        
+        // Try alternative download strategy for GitHub Actions
+        if (process.env.GITHUB_ACTIONS) {
+          try {
+            scraperLogger.info(`Attempting GitHub Actions fallback download strategy`, { rfpId: rfp.id });
+            
+            // Create a temporary file first, then move it
+            const tempPath = path.join('/tmp', `rfp-${rfp.id}-${Date.now()}-${suggestedFilename}`);
+            await download.saveAs(tempPath);
+            
+            // Verify temp file exists
+            if (await fs.pathExists(tempPath)) {
+              await fs.move(tempPath, downloadPath);
+              scraperLogger.info(`Successfully used fallback download strategy`, { 
+                rfpId: rfp.id,
+                tempPath,
+                finalPath: downloadPath 
+              });
+            } else {
+              throw new Error(`Fallback temp file creation failed: ${tempPath}`);
+            }
+          } catch (fallbackError) {
+            scraperLogger.error(`Fallback download strategy also failed`, {
+              rfpId: rfp.id,
+              originalError: error instanceof Error ? error.message : String(error),
+              fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+            });
+            throw error; // Re-throw original error
+          }
+        } else {
+          throw error;
+        }
       }
 
       scraperLogger.info(`Successfully downloaded RFP to ${downloadPath}`);

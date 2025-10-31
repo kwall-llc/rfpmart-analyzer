@@ -145,6 +145,9 @@ export class RFPMartScraper {
           const documents = await this.downloadRFPToMemory(rfp);
           
           if (documents.length > 0) {
+            // Save RFP record to database first (required for foreign key constraint)
+            await this.databaseManager.saveRFP(rfp);
+            
             // Process documents in memory and store in database
             const processed = await this.processDocumentsInMemory(documents);
             

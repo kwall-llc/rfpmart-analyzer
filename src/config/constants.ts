@@ -77,6 +77,7 @@ export const DATABASE = {
     RFPS: 'rfps',
     ANALYSIS_RESULTS: 'analysis_results',
     AI_ANALYSIS: 'ai_analysis',
+    RFP_DOCUMENTS: 'rfp_documents',
   },
   SCHEMA: {
     RFP_RUNS: `
@@ -138,6 +139,20 @@ export const DATABASE = {
         analysis_date DATETIME DEFAULT CURRENT_TIMESTAMP,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rfp_id) REFERENCES rfps (id)
+      )
+    `,
+    RFP_DOCUMENTS: `
+      CREATE TABLE IF NOT EXISTS rfp_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rfp_id TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        mime_type TEXT,
+        full_text_content TEXT,
+        extraction_method TEXT,
+        extracted_at TEXT,
+        file_size INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (rfp_id) REFERENCES rfps (id)
       )
     `,

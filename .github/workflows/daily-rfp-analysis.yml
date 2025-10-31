@@ -21,6 +21,7 @@ env:
 
 permissions:
   contents: write  # Allow pushing to repository
+  issues: write    # Allow creating GitHub issues
 
 jobs:
   rfp-analysis:

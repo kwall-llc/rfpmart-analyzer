@@ -43,6 +43,18 @@ export interface AnalysisRecord {
   createdAt?: string;
 }
 
+export interface RFPDocumentRecord {
+  id?: number;
+  rfpId: string;
+  filename: string;
+  mimeType?: string;
+  fullTextContent: string;
+  extractionMethod?: string;
+  extractedAt?: string;
+  fileSize?: number;
+  createdAt?: string;
+}
+
 export class DatabaseManager {
   private db?: Database;
   public dbPath: string;
@@ -102,6 +114,9 @@ export class DatabaseManager {
       
       // Create AI analysis table
       await this.db.exec(DATABASE.SCHEMA.AI_ANALYSIS);
+      
+      // Create RFP documents table
+      await this.db.exec(DATABASE.SCHEMA.RFP_DOCUMENTS);
 
       databaseLogger.debug('Database tables created successfully');
 
@@ -882,6 +897,49 @@ export class DatabaseManager {
         error: error instanceof Error ? error.message : String(error),
         rfpId: analysis.rfpId,
         analysisType: analysis.analysisType,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Add RFP document with full text content
+   */
+  async addRFPDocument(document: Omit<RFPDocumentRecord, 'id' | 'createdAt'>): Promise<number> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const result = await this.db.run(
+        `INSERT INTO ${DATABASE.TABLES.RFP_DOCUMENTS} 
+         (rfp_id, filename, mime_type, full_text_content, extraction_method, extracted_at, file_size)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          document.rfpId,
+          document.filename,
+          document.mimeType || null,
+          document.fullTextContent,
+          document.extractionMethod || null,
+          document.extractedAt || null,
+          document.fileSize || null
+        ]
+      );
+
+      const documentId = result.lastID;
+      databaseLogger.info('RFP document added to database', {
+        documentId,
+        rfpId: document.rfpId,
+        filename: document.filename,
+        textLength: document.fullTextContent.length,
+        fileSize: document.fileSize
+      });
+      
+      return documentId!;
+
+    } catch (error) {
+      databaseLogger.error('Failed to add RFP document', {
+        error: error instanceof Error ? error.message : String(error),
+        rfpId: document.rfpId,
+        filename: document.filename
       });
       throw error;
     }

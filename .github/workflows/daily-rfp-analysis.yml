@@ -92,7 +92,7 @@ jobs:
           }
           
           # Switch to data-store branch and copy database
-          git checkout data-store
+          git checkout -b data-store origin/data-store
           
           if [ -f "database.sqlite" ]; then
             echo "✅ Found persistent database"
@@ -265,7 +265,7 @@ jobs:
             echo "Last updated: $(date)" >> README.md
           else
             echo "Switching to existing data-store branch..."
-            git checkout data-store
+            git checkout -B data-store origin/data-store
           fi
           
           # Copy the updated database

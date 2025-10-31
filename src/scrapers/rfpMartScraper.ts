@@ -416,6 +416,15 @@ export class RFPMartScraper {
       // Create directory for this RFP
       const rfpDir = this.createRFPDirectory(rfp);
       await fs.ensureDir(rfpDir);
+      
+      // Verify directory was created
+      const dirExists = await fs.pathExists(rfpDir);
+      if (!dirExists) {
+        scraperLogger.error(`Failed to create RFP directory: ${rfpDir}`);
+        return false;
+      }
+      
+      scraperLogger.info(`Created RFP directory: ${rfpDir}`, { rfpId: rfp.id });
 
       // Set up download listener
       const downloadPromise = this.page.waitForEvent('download', { timeout: FILE_HANDLING.DOWNLOAD_TIMEOUT });
@@ -429,9 +438,26 @@ export class RFPMartScraper {
       // Get suggested filename
       const suggestedFilename = download.suggestedFilename();
       const downloadPath = path.join(rfpDir, suggestedFilename);
+      
+      // Ensure the directory still exists just before saving
+      await fs.ensureDir(path.dirname(downloadPath));
+      
+      scraperLogger.info(`Attempting to save download to: ${downloadPath}`, { rfpId: rfp.id });
 
       // Save the download to the RFP directory
-      await download.saveAs(downloadPath);
+      try {
+        await download.saveAs(downloadPath);
+      } catch (error) {
+        scraperLogger.error(`Failed to save download: ${error instanceof Error ? error.message : String(error)}`, {
+          rfpId: rfp.id,
+          downloadPath,
+          rfpDir,
+          suggestedFilename,
+          dirExists: await fs.pathExists(rfpDir),
+          parentDirExists: await fs.pathExists(path.dirname(downloadPath))
+        });
+        throw error;
+      }
 
       scraperLogger.info(`Successfully downloaded RFP to ${downloadPath}`);
 

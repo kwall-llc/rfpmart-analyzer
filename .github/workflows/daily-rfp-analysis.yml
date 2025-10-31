@@ -213,19 +213,22 @@ jobs:
           # Don't fail the workflow for analysis issues, let artifact upload handle it
           exit 0
 
-      - name: Generate GitHub reports
+      - name: Check generated reports
         if: always()
         run: |
-          echo "Generating GitHub-friendly reports..."
+          echo "Checking for generated reports..."
           
-          # Generate reports with GitHub Pages support
-          npm start generate-reports -- \
-            --output ./reports \
-            --github-pages \
-            --action-summary \
-            --max-rfps 50
+          # Reports are already generated during the main workflow
+          # Just check if they exist and list them
+          if [ -d "./data/reports" ]; then
+            echo "✅ Reports directory found"
+            echo "Report files:"
+            find ./data/reports -name "*.md" -o -name "*.html" -o -name "*.json" | head -20
+          else
+            echo "ℹ️ No reports directory found (no RFPs processed or no high-scoring RFPs)"
+          fi
           
-          echo "Reports generated successfully"
+          echo "Report check completed"
 
       - name: Upload persistent database
         if: always()

@@ -146,7 +146,9 @@ export class RFPMartScraper {
           
           if (documents.length > 0) {
             // Save RFP record to database first (required for foreign key constraint)
+            scraperLogger.info(`Saving RFP record to database: ${rfp.title}`, { rfpId: rfp.id });
             await this.databaseManager.saveRFP(rfp);
+            scraperLogger.info(`RFP record saved successfully: ${rfp.title}`, { rfpId: rfp.id });
             
             // Process documents in memory and store in database
             const processed = await this.processDocumentsInMemory(documents);

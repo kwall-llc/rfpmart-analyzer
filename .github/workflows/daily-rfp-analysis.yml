@@ -130,6 +130,18 @@ jobs:
           echo "Node.js version: $(node --version)"
           echo "npm version: $(npm --version)"
           
+          # Pre-create directory structure for GitHub Actions
+          echo "Creating directory structure..."
+          mkdir -p data/rfps data/reports logs
+          chmod -R 755 data logs
+          
+          # Show current working directory and permissions
+          echo "Working directory: $(pwd)"
+          echo "Directory structure:"
+          ls -la
+          echo "Data directory permissions:"
+          ls -la data/
+          
           # Test that the application can initialize
           echo "Testing application initialization..."
           set +e

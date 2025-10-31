@@ -448,67 +448,283 @@ jobs:
             echo "HIGH_PRIORITY_FOUND=false" >> $GITHUB_ENV
           fi
 
-      - name: Create GitHub Issue for High-Priority RFPs
-        if: env.HIGH_PRIORITY_FOUND == 'true'
+      - name: Create Daily RFP Analysis Summary Issue
+        if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
             
-            // Read the summary report if it exists
-            let reportContent = 'High-priority RFPs have been identified in the latest analysis run.';
+            // Helper function to safely read files
+            function safeReadFile(filePath) {
+              try {
+                return fs.readFileSync(filePath, 'utf8');
+              } catch (error) {
+                console.log(`Could not read ${filePath}:`, error.message);
+                return null;
+              }
+            }
+            
+            // Helper function to format file size
+            function formatFileSize(bytes) {
+              if (bytes === 0) return '0 Bytes';
+              const k = 1024;
+              const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+              const i = Math.floor(Math.log(bytes) / Math.log(k));
+              return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            // Read summary report
+            let summaryContent = '';
+            let highPriorityRFPs = [];
+            let mediumPriorityRFPs = [];
+            let totalAnalyzed = 0;
+            let averageScore = 0;
             
             try {
-              const reportsDir = './reports';
-              const files = fs.readdirSync(reportsDir);
-              const summaryFile = files.find(f => f.startsWith('README.md'));
-              
-              if (summaryFile) {
-                const summaryPath = path.join(reportsDir, summaryFile);
-                const content = fs.readFileSync(summaryPath, 'utf8');
+              // Look for summary report in data/reports directory
+              const reportsDir = './data/reports';
+              if (fs.existsSync(reportsDir)) {
+                const files = fs.readdirSync(reportsDir);
+                const summaryFile = files.find(f => f.startsWith('summary-report-') && f.endsWith('.md'));
                 
-                // Extract just the high-priority section
-                const highPriorityMatch = content.match(/## 🎯 Excellent Fit RFPs.*?(?=##|$)/s);
-                if (highPriorityMatch) {
-                  reportContent = highPriorityMatch[0];
+                if (summaryFile) {
+                  const summaryPath = path.join(reportsDir, summaryFile);
+                  const content = safeReadFile(summaryPath);
+                  
+                  if (content) {
+                    summaryContent = content;
+                    
+                    // Extract statistics
+                    const totalMatch = content.match(/Total RFPs Analyzed:\*\* (\d+)/);
+                    if (totalMatch) totalAnalyzed = parseInt(totalMatch[1]);
+                    
+                    const avgMatch = content.match(/Average Score:\*\* ([\d.]+)/);
+                    if (avgMatch) averageScore = parseFloat(avgMatch[1]);
+                    
+                    // Extract high priority RFPs section
+                    const highPriorityMatch = content.match(/## 🚀 High Priority RFPs \((\d+)\)(.*?)(?=##|$)/s);
+                    if (highPriorityMatch) {
+                      const count = parseInt(highPriorityMatch[1]);
+                      const section = highPriorityMatch[2];
+                      
+                      // Extract individual RFP details
+                      const rfpMatches = section.matchAll(/### (.+?)\n- \*\*Score:\*\* (.+?)\n- \*\*Institution:\*\* (.+?)\n(?:- \*\*Budget:\*\* (.+?)\n)?(?:- \*\*CMS:\*\* (.+?)\n)?- \*\*Reasoning:\*\* (.+?)\n/g);
+                      
+                      for (const match of rfpMatches) {
+                        highPriorityRFPs.push({
+                          title: match[1],
+                          score: match[2],
+                          institution: match[3],
+                          budget: match[4] || 'Not specified',
+                          cms: match[5] || 'Not specified',
+                          reasoning: match[6]
+                        });
+                      }
+                    }
+                    
+                    // Extract medium priority RFPs section
+                    const mediumPriorityMatch = content.match(/## ⚡ Medium Priority RFPs \((\d+)\)(.*?)(?=##|$)/s);
+                    if (mediumPriorityMatch) {
+                      const section = mediumPriorityMatch[2];
+                      
+                      // Extract individual RFP details
+                      const rfpMatches = section.matchAll(/- \*\*(.+?)\*\* - Score: (.+?)%\n(?:  - Institution: (.+?)\n)?(?:  - Budget: (.+?)\n)?/g);
+                      
+                      for (const match of rfpMatches) {
+                        mediumPriorityRFPs.push({
+                          title: match[1],
+                          score: match[2] + '%',
+                          institution: match[3] || 'Not specified',
+                          budget: match[4] || 'Not specified'
+                        });
+                      }
+                    }
+                  }
                 }
               }
             } catch (error) {
-              console.log('Could not read summary report:', error.message);
+              console.log('Error reading summary report:', error.message);
             }
             
-            const issueTitle = `🎯 High-Priority RFPs Found - ${new Date().toISOString().split('T')[0]}`;
-            const issueBody = `# High-Priority RFPs Detected
+            // Get database information
+            let databaseInfo = '';
+            try {
+              const dbPath = './data/database.sqlite';
+              if (fs.existsSync(dbPath)) {
+                const stats = fs.statSync(dbPath);
+                databaseInfo = `📊 **Database:** ${formatFileSize(stats.size)} (Updated: ${stats.mtime.toISOString()})`;
+              }
+            } catch (error) {
+              console.log('Could not read database info:', error.message);
+            }
             
-            The automated RFP analysis has identified high-priority opportunities that match KWALL's criteria.
+            // List individual RFP reports
+            let individualReports = [];
+            try {
+              const individualDir = './data/reports/individual';
+              if (fs.existsSync(individualDir)) {
+                const files = fs.readdirSync(individualDir);
+                individualReports = files.filter(f => f.endsWith('.md')).slice(0, 10); // Limit to 10
+              }
+            } catch (error) {
+              console.log('Could not read individual reports:', error.message);
+            }
             
-            ## Quick Actions Required:
-            1. Review the attached analysis reports
-            2. Evaluate RFPs for immediate pursuit
-            3. Assign team members for proposal development
-            4. Check due dates and plan accordingly
+            // Create issue content
+            const runDate = new Date().toISOString().split('T')[0];
+            const runTime = new Date().toISOString().split('T')[1].split('.')[0];
             
-            ## Analysis Details:
+            let issueTitle, issueLabels;
             
-            ${reportContent}
+            if (highPriorityRFPs.length > 0) {
+              issueTitle = `🎯 ${highPriorityRFPs.length} High-Priority RFPs Found - ${runDate}`;
+              issueLabels = ['rfp', 'high-priority', 'action-required', 'automated'];
+            } else {
+              issueTitle = `📊 Daily RFP Analysis Summary - ${runDate}`;
+              issueLabels = ['rfp', 'daily-summary', 'automated'];
+            }
             
-            ## Artifacts:
-            - Check the [workflow run artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed reports
-            - Look for high-priority individual RFP reports
-            - View online dashboard at [GitHub Pages](https://${context.repo.owner}.github.io/${context.repo.repo}/rfp-reports/)
+            const issueBody = `# Daily RFP Analysis Results
+            
+            **Run Date:** ${runDate} at ${runTime} UTC  
+            **Workflow Run:** [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})  
+            **Status:** ${totalAnalyzed > 0 ? '✅ Completed Successfully' : '⚠️ No RFPs Analyzed'}
+            
+            ${databaseInfo}
+            
+            ## 📈 Summary Statistics
+            
+            - **Total RFPs Analyzed:** ${totalAnalyzed}
+            - **Average Score:** ${averageScore}
+            - **High Priority RFPs:** ${highPriorityRFPs.length}
+            - **Medium Priority RFPs:** ${mediumPriorityRFPs.length}
+            
+            ${highPriorityRFPs.length > 0 ? `
+            ## 🚀 HIGH-PRIORITY OPPORTUNITIES (IMMEDIATE ACTION REQUIRED)
+            
+            ${highPriorityRFPs.map((rfp, index) => `
+            ### ${index + 1}. ${rfp.title}
+            
+            - **📊 Score:** ${rfp.score}
+            - **🏫 Institution:** ${rfp.institution}
+            - **💰 Budget:** ${rfp.budget}
+            - **💻 CMS:** ${rfp.cms}
+            - **🎯 Why It's a Good Fit:** ${rfp.reasoning}
+            
+            **Action Items:**
+            - [ ] Review detailed analysis report
+            - [ ] Check proposal deadline
+            - [ ] Assign team member
+            - [ ] Begin proposal preparation
             
             ---
-            *This issue was automatically created by the RFP Mart Analyzer workflow.*
+            `).join('')}
+            
+            ## 📋 Next Steps for High-Priority RFPs:
+            1. **Immediate Review:** Download and review individual RFP reports
+            2. **Due Date Check:** Verify proposal deadlines in source documents
+            3. **Team Assignment:** Assign experienced team members to high-scoring opportunities
+            4. **Proposal Planning:** Begin proposal development for highest-scoring RFPs
+            5. **Client Research:** Research institutions for better proposal customization
+            ` : ''}
+            
+            ${mediumPriorityRFPs.length > 0 ? `
+            ## ⚡ Medium Priority Opportunities
+            
+            ${mediumPriorityRFPs.slice(0, 5).map((rfp, index) => `
+            **${index + 1}. ${rfp.title}** (Score: ${rfp.score})
+            - Institution: ${rfp.institution}
+            - Budget: ${rfp.budget}
+            `).join('\n')}
+            
+            ${mediumPriorityRFPs.length > 5 ? `\n*...and ${mediumPriorityRFPs.length - 5} more medium-priority RFPs*` : ''}
+            ` : ''}
+            
+            ## 📁 Download Reports & Data
+            
+            ### 📊 Main Reports
+            - **[📋 Complete Analysis Results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Download artifacts ZIP
+            - **[📈 Summary Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Executive summary with all findings
+            - **[📄 Individual RFP Reports](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Detailed analysis for each high-priority RFP
+            
+            ### 💾 Database & Raw Data
+            - **[🗄️ Updated Database](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - SQLite database with all RFP data
+            - **[📜 Processing Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Complete workflow execution logs
+            
+            ${individualReports.length > 0 ? `
+            ### 📋 Individual RFP Analysis Reports Available:
+            ${individualReports.map(report => `- ${report.replace('.md', '').replace('rfp-', 'RFP ')}`).join('\n')}
+            ` : ''}
+            
+            ## 🔗 Quick Links
+            
+            - **[📊 View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - See complete execution details
+            - **[⬇️ Download All Results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Get artifacts ZIP file
+            - **[📈 Analysis Dashboard](https://github.com/${{ github.repository }}/actions)** - View historical analysis runs
+            - **[⚙️ Workflow Configuration](https://github.com/${{ github.repository }}/blob/main/.github/workflows/daily-rfp-analysis.yml)** - Review automation settings
+            
+            ${totalAnalyzed === 0 ? `
+            ## ⚠️ No RFPs Analyzed
+            
+            This run did not analyze any RFPs. This could be because:
+            - No new RFPs were found since the last run
+            - RFP Mart website had access issues
+            - Processing errors occurred (check logs)
+            
+            **Recommended Actions:**
+            1. Check the workflow logs for any errors
+            2. Verify RFP Mart credentials are working
+            3. Consider running a manual analysis with a different date range
+            ` : ''}
+            
+            ---
+            
+            **🤖 This issue was automatically created by the RFP Mart Analyzer**  
+            **📅 Next automated run:** Tomorrow at 9 AM EST  
+            **❓ Questions?** Check the [project documentation](https://github.com/${{ github.repository }}) or contact the development team
+            
+            > **💡 Pro Tip:** Close this issue once you've reviewed all high-priority opportunities and assigned them to team members.
             `;
             
-            github.rest.issues.create({
+            // Create the issue
+            const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: issueTitle,
               body: issueBody,
-              labels: ['rfp', 'high-priority', 'automated']
+              labels: issueLabels
             });
+            
+            console.log(`Created issue #${issue.data.number}: ${issueTitle}`);
+            
+            // If there are high-priority RFPs, also add a comment with quick action checklist
+            if (highPriorityRFPs.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.data.number,
+                body: `## 🎯 Quick Action Checklist for High-Priority RFPs
+                
+                Use this checklist to track your progress on the ${highPriorityRFPs.length} high-priority opportunities:
+                
+                ${highPriorityRFPs.map((rfp, index) => `
+                ### ${rfp.title}
+                - [ ] Downloaded and reviewed detailed analysis report
+                - [ ] Checked proposal deadline and requirements
+                - [ ] Researched institution background
+                - [ ] Assigned team member: ________________
+                - [ ] Created proposal timeline
+                - [ ] Decision: **Pursue** / **Pass** / **Monitor**
+                `).join('\n')}
+                
+                **🎯 Focus on RFPs with highest scores first!**
+                
+                ---
+                *Check off items as you complete them. Feel free to assign team members and add due dates.*`
+              });
+            }`
 
       - name: Upload artifacts (backup)
         if: always()

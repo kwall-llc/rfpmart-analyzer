@@ -724,7 +724,7 @@ jobs:
                 ---
                 *Check off items as you complete them. Feel free to assign team members and add due dates.*`
               });
-            }`
+            }
 
       - name: Upload artifacts (backup)
         if: always()

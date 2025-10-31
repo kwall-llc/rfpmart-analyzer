@@ -187,15 +187,31 @@ class RFPMartAnalyzerApp {
     try {
       systemLogger.info('📄 Starting document processing');
 
-      // Get list of RFP directories to process
-      const rfpDirectories = await this.getRFPDirectories();
+      // Get RFPs with documents from database (in-memory processing already completed during scraping)
+      const rfpsWithDocuments = await this.db.getRFPsWithDocuments();
       
-      if (rfpDirectories.length === 0) {
-        systemLogger.info('ℹ️  No RFP directories found to process');
+      if (rfpsWithDocuments.length === 0) {
+        systemLogger.info('ℹ️  No RFPs with documents found to process');
         return [];
       }
 
-      const results = await this.processor.processMultipleRFPs(rfpDirectories);
+      // Convert database records to format expected by analyzer
+      const results = rfpsWithDocuments.map(rfp => ({
+        rfpId: rfp.id,
+        extractedDocuments: rfp.documents?.map(doc => ({
+          filename: doc.filename,
+          text: doc.fullTextContent,
+          wordCount: doc.fullTextContent.split(/\s+/).length,
+          characterCount: doc.fullTextContent.length,
+          type: doc.mimeType || 'unknown'
+        })) || [],
+        combinedText: rfp.documents?.map(doc => doc.fullTextContent).join('\n\n') || '',
+        metadata: {
+          extractionSuccess: (rfp.documents?.length || 0) > 0,
+          totalWords: rfp.documents?.reduce((sum, doc) => sum + doc.fullTextContent.split(/\s+/).length, 0) || 0,
+          hasDocuments: (rfp.documents?.length || 0) > 0
+        }
+      }));
 
       systemLogger.info('✅ Document processing completed', {
         processed: results.length,

@@ -946,6 +946,51 @@ export class DatabaseManager {
   }
 
   /**
+   * Get RFPs with their associated documents for processing
+   */
+  async getRFPsWithDocuments(): Promise<Array<RFPRecord & { documents?: RFPDocumentRecord[] }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // First get all RFPs that have documents
+      const rfpsWithDocs = await this.db.all(`
+        SELECT DISTINCT r.* 
+        FROM ${DATABASE.TABLES.RFPS} r 
+        INNER JOIN ${DATABASE.TABLES.RFP_DOCUMENTS} d ON r.id = d.rfp_id 
+        ORDER BY r.created_at DESC
+      `);
+
+      // Then get documents for each RFP
+      const result: Array<RFPRecord & { documents?: RFPDocumentRecord[] }> = [];
+      
+      for (const rfp of rfpsWithDocs) {
+        const documents = await this.db.all<RFPDocumentRecord[]>(
+          `SELECT * FROM ${DATABASE.TABLES.RFP_DOCUMENTS} WHERE rfp_id = ? ORDER BY created_at ASC`,
+          [rfp.id]
+        );
+
+        result.push({
+          ...rfp,
+          documents: documents || []
+        });
+      }
+
+      databaseLogger.info('Retrieved RFPs with documents', { 
+        rfpCount: result.length,
+        totalDocuments: result.reduce((sum, rfp) => sum + (rfp.documents?.length || 0), 0)
+      });
+
+      return result;
+
+    } catch (error) {
+      databaseLogger.error('Failed to get RFPs with documents', { 
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return [];
+    }
+  }
+
+  /**
    * Close database connection
    */
   async close(): Promise<void> {

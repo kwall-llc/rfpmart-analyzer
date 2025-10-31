@@ -10,6 +10,8 @@ import { DatabaseManager } from './storage/database';
 import { FileManager } from './storage/fileManager';
 import { DataPersistenceManager } from './storage/dataPersistence';
 import { ReportGenerator } from './analyzers/reportGenerator';
+import { rssParser } from './services/rssFeedParser';
+import { aiPreFilter } from './services/aiPreFilter';
 import { SUCCESS_MESSAGES, RECOMMENDATION_LEVELS } from './config/constants';
 import fs from 'fs-extra';
 import * as path from 'path';
@@ -99,10 +101,10 @@ class RFPMartAnalyzerApp {
    */
   async runCompleteWorkflow(sinceDate?: Date): Promise<void> {
     try {
-      systemLogger.info('🔄 Starting complete RFP analysis workflow');
+      systemLogger.info('🔄 Starting complete RFP analysis workflow with RSS optimization');
 
-      // Step 1: Scrape new RFPs
-      const scrapingResult = await this.scrapeRFPs(sinceDate);
+      // Step 1: Scrape new RFPs using optimized workflow
+      const scrapingResult = await this.scrapeRFPsOptimized(sinceDate);
       
       if (scrapingResult.rfpsDownloaded === 0) {
         systemLogger.info('ℹ️  No new RFPs downloaded, workflow complete');
@@ -147,7 +149,95 @@ class RFPMartAnalyzerApp {
   }
 
   /**
-   * Scrape new RFPs from RFP Mart
+   * Optimized RSS-guided RFP scraping workflow
+   */
+  async scrapeRFPsOptimized(sinceDate?: Date): Promise<any> {
+    try {
+      scraperLogger.info('🚀 Starting optimized RSS-guided RFP scraping');
+
+      // Get last run date if not provided
+      if (!sinceDate) {
+        sinceDate = await this.db.getLastRunDate() || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+      }
+
+      // Step 1: Parse RSS feed for recent RFPs
+      scraperLogger.info(`📡 Fetching RSS feed entries since ${sinceDate.toISOString()}`);
+      const rssItems = await rssParser.getLatestRFPs(sinceDate, 50);
+      
+      if (rssItems.length === 0) {
+        scraperLogger.info('No new RFP entries found in RSS feed');
+        return {
+          rfpsFound: [],
+          rfpsDownloaded: 0,
+          rfpsAnalyzed: 0,
+          goodFitRFPs: 0,
+          cleanedUpRFPs: 0,
+          errors: [],
+          lastRunDate: new Date(),
+          optimizedWorkflow: true,
+          rssItemsFound: 0,
+          aiFiltered: 0
+        };
+      }
+
+      scraperLogger.info(`📰 Found ${rssItems.length} RSS entries to evaluate`);
+
+      // Step 2: AI pre-filter to identify promising RFPs
+      scraperLogger.info('🤖 Running AI pre-filter on RSS entries');
+      const promisingUrls = await aiPreFilter.getPromisingRFPUrls(rssItems, 15);
+      
+      scraperLogger.info(`🎯 AI identified ${promisingUrls.length} promising RFPs from ${rssItems.length} entries`);
+      
+      if (promisingUrls.length === 0) {
+        scraperLogger.info('No promising RFPs identified by AI filter');
+        return {
+          rfpsFound: [],
+          rfpsDownloaded: 0,
+          rfpsAnalyzed: 0,
+          goodFitRFPs: 0,
+          cleanedUpRFPs: 0,
+          errors: [],
+          lastRunDate: new Date(),
+          optimizedWorkflow: true,
+          rssItemsFound: rssItems.length,
+          aiFiltered: 0
+        };
+      }
+
+      // Step 3: Targeted scraping of promising URLs
+      scraperLogger.info(`🕷️  Starting targeted scraping of ${promisingUrls.length} promising URLs`);
+      await this.scraper.initialize();
+      
+      const result = await this.scraper.scrapeSpecificRFPs(promisingUrls);
+
+      // Add optimization metrics to result
+      const optimizedResult = {
+        ...result,
+        optimizedWorkflow: true,
+        rssItemsFound: rssItems.length,
+        aiFiltered: promisingUrls.length,
+        efficiency: rssItems.length > 0 ? Math.round((promisingUrls.length / rssItems.length) * 100) : 0
+      };
+
+      scraperLogger.info('✅ Optimized scraping completed', {
+        rssItemsFound: rssItems.length,
+        aiFiltered: promisingUrls.length,
+        efficiency: `${optimizedResult.efficiency}%`,
+        found: result.rfpsFound.length,
+        downloaded: result.rfpsDownloaded,
+        errors: result.errors.length,
+      });
+
+      return optimizedResult;
+
+    } catch (error) {
+      scraperLogger.error('❌ Optimized scraping failed', { error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  /**
+   * Traditional RFP scraping (fallback method)
    */
   async scrapeRFPs(sinceDate?: Date): Promise<any> {
     try {
@@ -440,8 +530,9 @@ program
 
 program
   .command('scrape')
-  .description('Only scrape new RFPs without processing')
+  .description('Scrape new RFPs using optimized RSS-guided workflow')
   .option('--since <date>', 'Only scrape RFPs since this date (YYYY-MM-DD)')
+  .option('--traditional', 'Use traditional scraping instead of RSS-guided workflow')
   .action(async (options) => {
     const app = new RFPMartAnalyzerApp();
     try {
@@ -452,8 +543,12 @@ program
         sinceDate = new Date(options.since);
       }
 
-      await app.scrapeRFPs(sinceDate);
-      console.log('✅ Scraping completed');
+      // Use optimized workflow by default, traditional if requested
+      const scrapingResult = options.traditional 
+        ? await app.scrapeRFPs(sinceDate)
+        : await app.scrapeRFPsOptimized(sinceDate);
+        
+      console.log('✅ Scraping completed:', scrapingResult);
       
     } catch (error) {
       console.error('❌ Scraping failed:', error instanceof Error ? error.message : error);

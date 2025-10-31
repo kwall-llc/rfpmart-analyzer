@@ -97,6 +97,96 @@ export class RFPMartScraper {
   }
 
   /**
+   * Scrape specific RFP URLs directly (for RSS-guided scraping)
+   */
+  async scrapeSpecificRFPs(rfpUrls: string[]): Promise<ScrapingResult> {
+    if (!this.page || !this.authManager) {
+      throw new Error('Scraper not initialized');
+    }
+
+    const result: ScrapingResult = {
+      rfpsFound: [],
+      rfpsDownloaded: 0,
+      rfpsAnalyzed: 0,
+      goodFitRFPs: 0,
+      cleanedUpRFPs: 0,
+      errors: [],
+      lastRunDate: new Date(),
+    };
+
+    try {
+      scraperLogger.info(`Starting targeted RFP scraping for ${rfpUrls.length} URLs`);
+
+      // Ensure we are authenticated
+      const authenticated = await this.authManager.ensureAuthenticated();
+      if (!authenticated) {
+        throw new Error(ERROR_MESSAGES.LOGIN_FAILED);
+      }
+
+      // Process each URL directly
+      for (const url of rfpUrls) {
+        try {
+          scraperLogger.info(`Processing RFP URL: ${url}`);
+          
+          // Navigate directly to the RFP page
+          await this.page.goto(url, { waitUntil: 'networkidle' });
+          await this.page.waitForTimeout(2000);
+
+          // Extract RFP details from the individual page
+          const rfp = await this.extractRFPDetailsFromPage(url);
+          
+          if (rfp) {
+            result.rfpsFound.push(rfp);
+            
+            // Download documents to memory buffers
+            const documents = await this.downloadRFPToMemory(rfp);
+            
+            if (documents.length > 0) {
+              // Save RFP record to database first
+              scraperLogger.info(`Saving RFP record to database: ${rfp.title}`, { rfpId: rfp.id });
+              await this.databaseManager.saveRFP(rfp);
+              
+              // Process documents in memory and store in database
+              const processed = await this.processDocumentsInMemory(documents);
+              
+              if (processed) {
+                result.rfpsDownloaded++;
+                scraperLogger.info(`Successfully processed targeted RFP: ${rfp.title}`, {
+                  rfpId: rfp.id,
+                  documentsProcessed: documents.length
+                });
+              }
+            } else {
+              scraperLogger.warn(`No documents found for targeted RFP: ${rfp.title}`, { rfpId: rfp.id });
+            }
+          } else {
+            scraperLogger.warn(`Could not extract RFP details from URL: ${url}`);
+          }
+        } catch (error) {
+          const errorMsg = `Failed to process RFP URL ${url}: ${error instanceof Error ? error.message : String(error)}`;
+          result.errors.push(errorMsg);
+          scraperLogger.error(errorMsg);
+        }
+      }
+
+      scraperLogger.info('Targeted RFP scraping completed', {
+        urlsProcessed: rfpUrls.length,
+        found: result.rfpsFound.length,
+        downloaded: result.rfpsDownloaded,
+        errors: result.errors.length,
+      });
+
+      return result;
+
+    } catch (error) {
+      const errorMsg = `Targeted scraping failed: ${error instanceof Error ? error.message : String(error)}`;
+      result.errors.push(errorMsg);
+      scraperLogger.error(errorMsg);
+      throw error;
+    }
+  }
+
+  /**
    * Main scraping method to find and download new RFPs
    */
   async scrapeNewRFPs(sinceDate?: Date): Promise<ScrapingResult> {
@@ -412,6 +502,156 @@ export class RFPMartScraper {
     return FILE_HANDLING.ALLOWED_EXTENSIONS.some(ext => lowercaseUrl.includes(ext));
   }
 
+  /**
+   * Extract RFP details from individual RFP page (for RSS-guided scraping)
+   */
+  private async extractRFPDetailsFromPage(url: string): Promise<RFPListing | null> {
+    if (!this.page) throw new Error('Page not initialized');
+
+    try {
+      scraperLogger.debug(`Extracting RFP details from page: ${url}`);
+
+      // Try to extract title from page
+      let title = '';
+      const titleSelectors = [
+        'h1',
+        '.rfpmart-title',
+        '.title',
+        '.rfp-title',
+        'title'
+      ];
+
+      for (const selector of titleSelectors) {
+        const titleElement = await this.page.$(selector);
+        if (titleElement) {
+          const titleText = await titleElement.textContent();
+          if (titleText && titleText.trim().length > 0) {
+            title = titleText.trim();
+            break;
+          }
+        }
+      }
+
+      // Fallback: extract title from URL or use generic title
+      if (!title) {
+        const urlParts = url.split('/');
+        const lastPart = urlParts[urlParts.length - 1];
+        title = lastPart.replace(/\.(html?|php)$/, '').replace(/[-_]/g, ' ') || 'RFP from RSS Feed';
+      }
+
+      // Try to extract posted date
+      let postedDate = null;
+      const dateSelectors = [
+        '.posted-date',
+        '.date-posted',
+        '.rfp-date',
+        '[class*="date"]',
+        '[class*="posted"]'
+      ];
+
+      for (const selector of dateSelectors) {
+        const dateElement = await this.page.$(selector);
+        if (dateElement) {
+          const dateText = await dateElement.textContent();
+          if (dateText && dateText.trim().length > 0) {
+            // Try to parse the date
+            const parsedDate = parseRFPDate(dateText.trim());
+            if (parsedDate) {
+              postedDate = dateText.trim();
+              break;
+            }
+          }
+        }
+      }
+
+      // Fallback: use current date if no date found
+      if (!postedDate) {
+        postedDate = new Date().toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+
+      // Try to extract description
+      let description = '';
+      const descSelectors = [
+        '.description',
+        '.rfp-description',
+        '.content',
+        '.summary',
+        'meta[name="description"]'
+      ];
+
+      for (const selector of descSelectors) {
+        const descElement = await this.page.$(selector);
+        if (descElement) {
+          let descText = '';
+          if (selector.includes('meta')) {
+            descText = await descElement.getAttribute('content') || '';
+          } else {
+            descText = await descElement.textContent() || '';
+          }
+          
+          if (descText && descText.trim().length > 0) {
+            description = descText.trim().substring(0, 500); // Limit description length
+            break;
+          }
+        }
+      }
+
+      // Try to extract institution name
+      let institution = '';
+      const instSelectors = [
+        '.institution',
+        '.organization',
+        '.agency',
+        '.client',
+        '[class*="institution"]',
+        '[class*="organization"]'
+      ];
+
+      for (const selector of instSelectors) {
+        const instElement = await this.page.$(selector);
+        if (instElement) {
+          const instText = await instElement.textContent();
+          if (instText && instText.trim().length > 0) {
+            institution = instText.trim();
+            break;
+          }
+        }
+      }
+
+      // Generate RFP ID
+      const rfpId = this.generateRFPId(title, postedDate);
+
+      const rfpDetails: RFPListing = {
+        id: rfpId,
+        title: title,
+        postedDate: postedDate,
+        detailUrl: url,
+        downloadUrl: url, // Use the same URL for download attempts
+        institution: institution || undefined,
+        description: description || undefined
+      };
+
+      scraperLogger.info(`Extracted RFP details from page`, {
+        rfpId: rfpDetails.id,
+        title: rfpDetails.title,
+        hasInstitution: !!rfpDetails.institution,
+        hasDescription: !!rfpDetails.description
+      });
+
+      return rfpDetails;
+
+    } catch (error) {
+      scraperLogger.error(`Failed to extract RFP details from page: ${url}`, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
+  }
 
   /**
    * Download and process RFP document in memory (no file storage)

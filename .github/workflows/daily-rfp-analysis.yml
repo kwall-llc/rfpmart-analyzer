@@ -695,7 +695,8 @@ jobs:
               repo: context.repo.repo,
               title: issueTitle,
               body: issueBody,
-              labels: issueLabels
+              labels: issueLabels,
+              assignees: ['kwall1']
             });
             
             console.log(`Created issue #${issue.data.number}: ${issueTitle}`);

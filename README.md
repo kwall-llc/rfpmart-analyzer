@@ -26,7 +26,10 @@ The RFP Mart Analyzer automatically:
 - **Technology Stack Analysis**: Identification of CMS preferences and technical requirements
 
 ### 🔄 Automated Discovery & Processing
+- **RSS-Optimized Workflow**: Pre-filters opportunities via public RSS feed before authenticated scraping
+- **AI-Powered Pre-Filtering**: Conservative keyword-based analysis identifies promising RFPs
 - **Daily GitHub Actions**: Scheduled runs at 9 AM EST with manual trigger support
+- **Targeted Scraping**: Only scrapes pre-filtered promising RFPs, reducing server load
 - **Organized File Storage**: RFP-specific directories with structured document organization
 - **Smart Date Filtering**: Avoids reprocessing with configurable date range support
 - **Multi-Format Support**: PDF, DOC, DOCX, ZIP, RAR, TXT extraction and analysis
@@ -89,9 +92,11 @@ rfpmart-analyzer/
 │   │   └── rfpMartScraper.ts     # Main scraping logic
 │   ├── services/           # AI and reporting services
 │   │   ├── aiAnalyzer.ts         # AI-powered RFP analysis
+│   │   ├── aiPreFilter.ts        # RSS pre-filtering service
 │   │   ├── fitReportGenerator.ts # Professional report generation
 │   │   ├── githubReporter.ts     # GitHub-native reporting
-│   │   └── rfpCleanupManager.ts  # Intelligent RFP cleanup
+│   │   ├── rfpCleanupManager.ts  # Intelligent RFP cleanup
+│   │   └── rssFeedParser.ts      # RSS feed parsing service
 │   ├── storage/            # Data persistence
 │   │   ├── database.ts           # SQLite database with AI analysis
 │   │   └── fileManager.ts        # File organization
@@ -218,11 +223,14 @@ The system uses configurable keyword lists for intelligent scoring:
 ### Command Line Interface
 
 ```bash
-# Run complete analysis workflow (includes AI analysis and cleanup)
+# Run complete optimized workflow (RSS → AI pre-filter → targeted scrape)
 npm start run
 
 # Run analysis for RFPs since specific date
 npm start run -- --since 2024-01-01
+
+# Use traditional full scraping (bypasses RSS optimization)
+npm start run -- --traditional
 
 # Scrape only (no AI analysis or processing)
 npm start scrape

@@ -206,6 +206,15 @@ class RFPMartAnalyzerApp {
 
       // Step 3: Targeted scraping of promising URLs
       scraperLogger.info(`🕷️  Starting targeted scraping of ${promisingUrls.length} promising URLs`);
+      
+      // Log the specific URLs being scraped for transparency
+      if (promisingUrls.length > 0) {
+        scraperLogger.info(`🎯 Targeting these promising RFPs:`);
+        promisingUrls.forEach((url, index) => {
+          scraperLogger.info(`  ${index + 1}. ${url}`);
+        });
+      }
+      
       await this.scraper.initialize();
       
       const result = await this.scraper.scrapeSpecificRFPs(promisingUrls);

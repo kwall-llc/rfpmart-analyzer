@@ -58,11 +58,15 @@ export class AIPreFilterService {
         })) {
           results.push(filterResult);
           
+          analyzerLogger.info(`✅ Promising RFP identified: "${rfpItem.title}" (confidence: ${(filterResult.confidence * 100).toFixed(1)}%, ${filterResult.reasoning})`);
+          
           // Stop if we've reached max results
           if (results.length >= maxResults) {
             analyzerLogger.info(`Reached maximum results limit: ${maxResults}`);
             break;
           }
+        } else {
+          analyzerLogger.debug(`❌ RFP filtered out: "${rfpItem.title}" (confidence: ${(filterResult.confidence * 100).toFixed(1)}%, ${filterResult.reasoning})`);
         }
       } catch (error) {
         analyzerLogger.warn(`Failed to analyze RSS item "${rfpItem.title}": ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -74,6 +78,16 @@ export class AIPreFilterService {
     
     // Sort by confidence score
     results.sort((a, b) => b.confidence - a.confidence);
+    
+    // Log summary of selected RFPs
+    if (results.length > 0) {
+      analyzerLogger.info(`📋 Selected promising RFPs for detailed analysis:`);
+      results.forEach((result, index) => {
+        analyzerLogger.info(`  ${index + 1}. "${result.rfpItem.title}" (${(result.confidence * 100).toFixed(1)}% confidence)`);
+      });
+    } else {
+      analyzerLogger.info(`📋 No promising RFPs found matching criteria in this batch`);
+    }
     
     return results;
   }
@@ -204,6 +218,10 @@ Be conservative - only flag as promising if there are clear indicators this matc
       ...config.keywords.cmsAcceptable
     ].some(keyword => text.includes(keyword.toLowerCase()));
     
+    // Check for budget indicators (positive signal but not required)
+    const budgetKeywords = ['$', 'budget', 'funding', 'cost', 'price', 'million', 'thousand'];
+    const budgetMatch = budgetKeywords.some(keyword => text.includes(keyword));
+    
     // Check for red flags
     const redFlags = config.keywords.redFlags.filter(flag => 
       text.includes(flag.toLowerCase())
@@ -228,13 +246,19 @@ Be conservative - only flag as promising if there are clear indicators this matc
       categories.push('cms');
     }
     
+    // Small boost for budget information (signals transparency)
+    if (budgetMatch) {
+      confidence += 0.1;
+      categories.push('budget_info');
+    }
+    
     // Reduce confidence for red flags
     confidence -= redFlags.length * 0.2;
     confidence = Math.max(0, Math.min(1, confidence));
     
     const isPromising = confidence >= 0.5 && higherEdMatch && redFlags.length === 0;
     
-    const reasoning = this.generateFallbackReasoning(higherEdMatch, projectTypeMatch, cmsMatch, redFlags);
+    const reasoning = this.generateFallbackReasoning(higherEdMatch, projectTypeMatch, cmsMatch, budgetMatch, redFlags);
     
     return {
       rfpItem,
@@ -250,6 +274,7 @@ Be conservative - only flag as promising if there are clear indicators this matc
     higherEdMatch: boolean,
     projectTypeMatch: boolean, 
     cmsMatch: boolean,
+    budgetMatch: boolean,
     redFlags: string[]
   ): string {
     const reasons: string[] = [];
@@ -264,6 +289,10 @@ Be conservative - only flag as promising if there are clear indicators this matc
     
     if (cmsMatch) {
       reasons.push('mentions relevant CMS technology');
+    }
+    
+    if (budgetMatch) {
+      reasons.push('includes budget information');
     }
     
     if (redFlags.length > 0) {
@@ -296,9 +325,10 @@ Be conservative - only flag as promising if there are clear indicators this matc
       return false;
     }
     
-    // Must meet budget threshold if specified and budget is estimated
-    if (criteria.minBudgetThreshold && result.estimatedBudget && 
-        result.estimatedBudget < criteria.minBudgetThreshold) {
+    // Budget threshold only disqualifies if budget is clearly specified and below threshold
+    // Missing budget information doesn't disqualify (most RFPs don't list budget in RSS)
+    if (criteria.minBudgetThreshold && result.estimatedBudget !== undefined && 
+        result.estimatedBudget > 0 && result.estimatedBudget < criteria.minBudgetThreshold) {
       return false;
     }
     

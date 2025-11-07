@@ -991,6 +991,31 @@ export class DatabaseManager {
   }
 
   /**
+   * Execute a custom query - for internal use by dashboard generator and other utilities
+   */
+  async executeQuery(query: string, params: any[] = []): Promise<any> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // Determine if this is a single row query (contains LIMIT 1 or uses aggregate functions)
+      const isSingleRow = query.includes('LIMIT 1') ||
+                          /\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(query);
+
+      if (isSingleRow) {
+        return await this.db.get(query, params);
+      } else {
+        return await this.db.all(query, params);
+      }
+    } catch (error) {
+      databaseLogger.error('Failed to execute custom query', {
+        error: error instanceof Error ? error.message : String(error),
+        query: query.substring(0, 100) + '...' // Log first 100 chars of query
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Close database connection
    */
   async close(): Promise<void> {

@@ -144,5 +144,12 @@
         ]
       }
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "sequential-thinking",
+    "memory",
+    "filesystem",
+    "browser-tools",
+    "fetch"
+  ]
 }

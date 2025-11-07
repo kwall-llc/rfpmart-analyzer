@@ -217,6 +217,37 @@ jobs:
           # Don't fail the workflow for analysis issues, let artifact upload handle it
           exit 0
 
+      - name: Generate Static Dashboard
+        if: always()
+        run: |
+          echo "🎨 Generating static HTML dashboard..."
+
+          # Generate the dashboard (this will also build if needed)
+          set +e
+          npm run dashboard
+          DASHBOARD_EXIT_CODE=$?
+          set -e
+
+          if [ $DASHBOARD_EXIT_CODE -eq 0 ] && [ -f "./data/reports/dashboard.html" ]; then
+            echo "✅ Dashboard generated successfully"
+
+            # Get dashboard file info
+            DASHBOARD_SIZE=$(stat -f%z ./data/reports/dashboard.html 2>/dev/null || stat -c%s ./data/reports/dashboard.html)
+            echo "📊 Dashboard size: $DASHBOARD_SIZE bytes"
+
+            # Count RFPs in dashboard
+            RFP_COUNT=$(grep -o '"rfpId":' ./data/reports/dashboard.html | wc -l || echo "0")
+            echo "📋 Dashboard contains: $RFP_COUNT RFPs"
+
+            echo "DASHBOARD_GENERATED=true" >> $GITHUB_ENV
+          else
+            echo "⚠️ Dashboard generation failed or file not found"
+            echo "DASHBOARD_GENERATED=false" >> $GITHUB_ENV
+          fi
+
+          # Always continue to next step
+          exit 0
+
       - name: Check generated reports
         if: always()
         run: |
@@ -644,7 +675,16 @@ jobs:
             ` : ''}
             
             ## 📁 Download Reports & Data
-            
+
+            ${process.env.DASHBOARD_GENERATED === 'true' ? `
+            ### 🎯 Interactive Dashboard (Click to View!)
+            - **[📊 Live RFP Dashboard](https://${context.repo.owner}.github.io/${context.repo.repo}/rfp-reports/dashboard.html)** - 📱 **Mobile-friendly interactive dashboard** - Perfect for non-technical users!
+            - **[📊 Dashboard (GitHub View)](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/data/reports/dashboard.html)** - View directly in GitHub
+
+            > 💡 **For Non-Technical Users:** Click the "Live RFP Dashboard" link above for an easy-to-use interface showing all RFP opportunities with search, filtering, and export capabilities. No technical knowledge required!
+
+            ` : ''}
+
             ### 📊 Main Reports
             - **[📋 Complete Analysis Results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Download artifacts ZIP
             - **[📈 Summary Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})** - Executive summary with all findings

@@ -8,7 +8,7 @@
       }
     },
     "memory": {
-      "command": "npx", 
+      "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-memory"],
       "env": {
         "MEMORY_STORAGE_PATH": ".claude/memory"
@@ -21,18 +21,11 @@
         "ALLOWED_DIRECTORIES": "./src,./data,./logs,./tests,./.claude,./docs"
       }
     },
-    "browser-tools": {
+    "puppeteer": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-browser"],
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
       "env": {
         "BROWSER_HEADLESS": "true"
-      }
-    },
-    "fetch": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-fetch"],
-      "env": {
-        "ENABLE_IMAGE_FETCH": "true"
       }
     }
   }

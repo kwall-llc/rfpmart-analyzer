@@ -106,7 +106,11 @@ function getRequiredEnv(key: string): string {
 }
 
 function getOptionalEnv(key: string, defaultValue: string = ''): string {
-  return process.env[key] || defaultValue;
+  const value = process.env[key];
+  if (value === undefined || value === null) {
+    return defaultValue;
+  }
+  return String(value);
 }
 
 function getNumericEnv(key: string, defaultValue: number): number {
@@ -125,8 +129,17 @@ function getBooleanEnv(key: string, defaultValue: boolean = false): boolean {
   return value.toLowerCase() === 'true';
 }
 
-function parseKeywords(envValue: string): string[] {
-  return envValue ? envValue.split(',').map(k => k.trim().toLowerCase()) : [];
+function parseKeywords(envValue: string | undefined | null): string[] {
+  if (!envValue || typeof envValue !== 'string') {
+    return [];
+  }
+
+  try {
+    return envValue.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0);
+  } catch (error) {
+    console.warn(`Failed to parse keywords from value: ${envValue}`, error);
+    return [];
+  }
 }
 
 export const config: EnvironmentConfig = {
@@ -212,6 +225,36 @@ export const config: EnvironmentConfig = {
 
   nodeEnv: getOptionalEnv('NODE_ENV', 'development'),
 };
+
+// Validate configuration after loading
+function validateConfig() {
+  try {
+    // Validate critical keyword arrays are properly loaded
+    const keywordArrays = [
+      { name: 'higherEd', value: config.keywords.higherEd },
+      { name: 'cmsPreferred', value: config.keywords.cmsPreferred },
+      { name: 'projectTypes', value: config.keywords.projectTypes },
+    ];
+
+    keywordArrays.forEach(({ name, value }) => {
+      if (!Array.isArray(value)) {
+        console.warn(`Warning: ${name} keywords not properly loaded, using empty array`);
+      } else if (value.length === 0) {
+        console.warn(`Warning: ${name} keywords array is empty, this may affect RFP analysis`);
+      }
+    });
+
+    console.log('✅ Configuration validated successfully');
+    console.log(`📊 Loaded ${config.keywords.higherEd.length} higher-ed keywords, ${config.keywords.cmsPreferred.length} preferred CMS keywords`);
+  } catch (error) {
+    console.error('❌ Configuration validation failed:', error);
+  }
+}
+
+// Run validation if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  validateConfig();
+}
 
 // Ensure directories exist
 export function ensureDirectories(): void {

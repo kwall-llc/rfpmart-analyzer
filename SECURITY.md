@@ -96,6 +96,38 @@ If credentials are accidentally exposed:
    - Inform team members of credential rotation
    - Update all deployed instances with new credentials
 
+## Historical Credential Exposure Status
+
+**⚠️ IMPORTANT**: This repository's git history contains exposed credentials in commit `8e1f756` (initial implementation).
+
+**Current Status (2025-11-11)**:
+- **Fixed**: All current files (.env.example) contain only placeholder values
+- **Secured**: Real credentials are properly stored in GitHub Secrets for CI/CD
+- **Documented**: Created comprehensive security documentation
+- **Attempted**: Git history sanitization using git filter-branch (blocked by technical issues)
+
+**Exposed Credentials in History**:
+- RFP Mart username: `***REMOVED***`
+- RFP Mart password: `***REMOVED***`
+- These were in comments in `.env.example` in the initial commit
+
+**Risk Assessment**:
+- **Current Risk**: LOW (repository is private, credentials are in history comments only)
+- **Public Repository Risk**: HIGH (credentials would be visible in git history)
+- **Mitigation**: Repository must remain private unless history is fully sanitized
+
+**Sanitization Attempts**:
+- Created sanitization scripts (`sanitize-env.sh`, `sanitize-env-index.sh`)
+- Attempted git filter-branch with tree-filter and index-filter approaches
+- Attempted BFG Repo-Cleaner installation (timeout due to dependencies)
+- All attempts blocked by technical constraints
+
+**Recommendations**:
+1. **Keep repository private** until git history is sanitized
+2. **Rotate exposed credentials** as a precautionary measure
+3. **Use git-filter-repo or BFG** for complete history sanitization if going public
+4. **Consider fresh repository** with clean history for public release
+
 ## Repository Visibility
 
 This project contains business logic but **should remain PRIVATE** due to:
@@ -113,13 +145,15 @@ If repository must be made public:
 
 Before any major release or repository changes:
 
-- [ ] No credentials in source code
-- [ ] No credentials in `.env.example`
-- [ ] All secrets using environment variables
-- [ ] `.gitignore` properly excludes sensitive files
-- [ ] GitHub secrets properly configured
-- [ ] Git history clean of credential references
-- [ ] Test workflows use only safe credentials
+- [x] No credentials in source code
+- [x] No credentials in `.env.example`
+- [x] All secrets using environment variables
+- [x] `.gitignore` properly excludes sensitive files
+- [x] GitHub secrets properly configured
+- [❌] Git history clean of credential references (see Historical Status above)
+- [x] Test workflows use only safe credentials
+
+**Note**: Git history sanitization is required before making repository public.
 
 ## Contact
 

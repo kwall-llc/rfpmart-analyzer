@@ -288,29 +288,76 @@ class RFPMartAnalyzerApp {
 
       // Get RFPs with documents from database (in-memory processing already completed during scraping)
       const rfpsWithDocuments = await this.db.getRFPsWithDocuments();
-      
+
       if (rfpsWithDocuments.length === 0) {
         systemLogger.info('ℹ️  No RFPs with documents found to process');
         return [];
       }
 
+      systemLogger.info(`🔍 Processing ${rfpsWithDocuments.length} RFPs with documents`);
+
       // Convert database records to format expected by analyzer
-      const results = rfpsWithDocuments.map(rfp => ({
-        rfpId: rfp.id,
-        extractedDocuments: rfp.documents?.map(doc => ({
-          filename: doc.filename,
-          text: doc.fullTextContent,
-          wordCount: doc.fullTextContent.split(/\s+/).length,
-          characterCount: doc.fullTextContent.length,
-          type: doc.mimeType || 'unknown'
-        })) || [],
-        combinedText: rfp.documents?.map(doc => doc.fullTextContent).join('\n\n') || '',
-        metadata: {
-          extractionSuccess: (rfp.documents?.length || 0) > 0,
-          totalWords: rfp.documents?.reduce((sum, doc) => sum + doc.fullTextContent.split(/\s+/).length, 0) || 0,
-          hasDocuments: (rfp.documents?.length || 0) > 0
+      const results = rfpsWithDocuments.map(rfp => {
+        try {
+          // Validate documents before processing
+          const validDocuments = (rfp.documents || []).filter(doc => {
+            if (!doc.fullTextContent) {
+              systemLogger.warn('⚠️ Document has no content', {
+                rfpId: rfp.id,
+                filename: doc.filename,
+                hasFilename: !!doc.filename,
+                contentType: typeof doc.fullTextContent
+              });
+              return false;
+            }
+            return true;
+          });
+
+          if (validDocuments.length !== (rfp.documents?.length || 0)) {
+            systemLogger.info(`📄 RFP ${rfp.id}: Using ${validDocuments.length} valid documents out of ${rfp.documents?.length || 0} total`);
+          }
+
+          return {
+            rfpId: rfp.id,
+            extractedDocuments: validDocuments.map(doc => {
+              const safeContent = doc.fullTextContent || '';
+              return {
+                filename: doc.filename,
+                text: safeContent,
+                wordCount: safeContent.split(/\s+/).filter(word => word.length > 0).length,
+                characterCount: safeContent.length,
+                type: doc.mimeType || 'unknown'
+              };
+            }),
+            combinedText: validDocuments.map(doc => doc.fullTextContent || '').join('\n\n'),
+            metadata: {
+              extractionSuccess: validDocuments.length > 0,
+              totalWords: validDocuments.reduce((sum, doc) => {
+                const safeContent = doc.fullTextContent || '';
+                return sum + safeContent.split(/\s+/).filter(word => word.length > 0).length;
+              }, 0),
+              hasDocuments: validDocuments.length > 0
+            }
+          };
+        } catch (docError) {
+          systemLogger.error('❌ Error processing RFP documents', {
+            rfpId: rfp.id,
+            error: docError instanceof Error ? docError.message : String(docError)
+          });
+
+          // Return a safe fallback object
+          return {
+            rfpId: rfp.id,
+            extractedDocuments: [],
+            combinedText: '',
+            metadata: {
+              extractionSuccess: false,
+              totalWords: 0,
+              hasDocuments: false
+            }
+          };
         }
-      }));
+      });
 
       systemLogger.info('✅ Document processing completed', {
         processed: results.length,

@@ -115,7 +115,11 @@
       "Bash(sqlite3:*)",
       "Bash(npm run lint)",
       "Bash(npm test)",
-      "WebFetch(domain:feeds.feedburner.com)"
+      "WebFetch(domain:feeds.feedburner.com)",
+      "Bash(gh run list:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh run view:*)"
     ],
     "deny": [
       "Read(node_modules/)",
@@ -132,6 +136,15 @@
       "Read(.idea/)"
     ]
   },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "sequential-thinking",
+    "memory",
+    "filesystem",
+    "browser-tools",
+    "fetch",
+    "puppeteer"
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -144,12 +157,5 @@
         ]
       }
     ]
-  },
-  "enabledMcpjsonServers": [
-    "sequential-thinking",
-    "memory",
-    "filesystem",
-    "browser-tools",
-    "fetch"
-  ]
+  }
 }

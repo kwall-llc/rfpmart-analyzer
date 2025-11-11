@@ -126,7 +126,9 @@
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter 'bash ./sanitize-env.sh' --all)",
       "Bash(git --version)",
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter 'bash ./sanitize-env.sh' HEAD)",
-      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter 'bash ./sanitize-env-index.sh' HEAD)"
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter 'bash ./sanitize-env-index.sh' HEAD)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [
       "Read(node_modules/)",

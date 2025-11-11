@@ -122,7 +122,8 @@
       "Bash(gh run view:*)",
       "Bash(git filter-repo:*)",
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter './sanitize-env.sh' --all)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter 'bash ./sanitize-env.sh' --all)"
     ],
     "deny": [
       "Read(node_modules/)",

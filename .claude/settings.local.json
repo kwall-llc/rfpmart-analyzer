@@ -125,7 +125,8 @@
       "Bash(brew install:*)",
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter 'bash ./sanitize-env.sh' --all)",
       "Bash(git --version)",
-      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter 'bash ./sanitize-env.sh' HEAD)"
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter 'bash ./sanitize-env.sh' HEAD)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter 'bash ./sanitize-env-index.sh' HEAD)"
     ],
     "deny": [
       "Read(node_modules/)",

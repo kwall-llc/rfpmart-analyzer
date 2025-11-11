@@ -119,7 +119,10 @@
       "Bash(gh run list:*)",
       "Bash(gh issue list:*)",
       "Bash(gh issue:*)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(git filter-repo:*)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --tree-filter './sanitize-env.sh' --all)",
+      "Bash(brew install:*)"
     ],
     "deny": [
       "Read(node_modules/)",

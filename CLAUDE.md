@@ -42,7 +42,7 @@ Configured servers in `.mcp.json`:
 # Analyze the entire codebase
 /analyze @src --focus architecture
 
-# Improve code quality across project  
+# Improve code quality across project
 /improve @src --focus quality --loop
 
 # Build and test the application
@@ -51,6 +51,12 @@ Configured servers in `.mcp.json`:
 # Deploy with comprehensive checks
 /git commit --validate --safe-mode
 ```
+
+### Recent Fixes (2025-11-11)
+- **✅ Fixed Document Processing**: Resolved null safety errors that prevented RFP analysis
+- **✅ Fixed GitHub Pages**: Enabled automated dashboard deployment
+- **✅ Security Audit**: Removed exposed credentials and added comprehensive security documentation
+- **🔧 Git History**: Documented credential exposure in early commits (see SECURITY.md)
 
 ### RFP Analysis Commands
 ```bash

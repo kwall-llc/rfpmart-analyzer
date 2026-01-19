@@ -30,7 +30,7 @@ The RFP Mart Analyzer uses advanced AI technology to provide intelligent, contex
 #### OpenAI (Recommended)
 ```env
 AI_PROVIDER=openai
-AI_OPENAI_API_KEY=sk-proj-your-key-here
+AI_API_KEY=sk-proj-your-key-here
 AI_OPENAI_MODEL=gpt-4  # or gpt-4-turbo, gpt-3.5-turbo
 ```
 

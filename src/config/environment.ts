@@ -200,7 +200,7 @@ export const config: EnvironmentConfig = {
   ai: {
     provider: getOptionalEnv('AI_PROVIDER', 'openai'),
     openai: {
-      apiKey: getOptionalEnv('AI_OPENAI_API_KEY', ''),
+      apiKey: getOptionalEnv('AI_API_KEY', ''),
       model: getOptionalEnv('AI_OPENAI_MODEL', 'gpt-4'),
     },
     anthropic: {

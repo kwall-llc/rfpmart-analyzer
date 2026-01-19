@@ -12,7 +12,7 @@ This document outlines security practices for the RFP Mart Analyzer project to e
 2. **GitHub Secrets**: Production credentials stored in repository secrets:
    - `RFPMART_USERNAME`
    - `RFPMART_PASSWORD`
-   - `AI_OPENAI_API_KEY`
+   - `AI_API_KEY`
 3. **Example Files**: `.env.example` contains only placeholder values
 4. **Git Ignore**: `.env` file properly ignored in `.gitignore`
 
@@ -48,7 +48,7 @@ This document outlines security practices for the RFP Mart Analyzer project to e
    ```env
    RFPMART_USERNAME=your_actual_username
    RFPMART_PASSWORD=your_actual_password
-   AI_OPENAI_API_KEY=your_actual_api_key
+   AI_API_KEY=your_actual_api_key
    ```
 
 3. **Never commit the `.env` file** - it's automatically ignored

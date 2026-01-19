@@ -67,7 +67,7 @@ NOTIFICATION_EMAIL=
 
 # AI Analysis Configuration
 AI_PROVIDER=openai
-AI_OPENAI_API_KEY=your-openai-api-key-here
+AI_API_KEY=your-openai-api-key-here
 AI_OPENAI_MODEL=gpt-4
 AI_ANTHROPIC_API_KEY=
 AI_ANTHROPIC_MODEL=claude-3-sonnet-20240229

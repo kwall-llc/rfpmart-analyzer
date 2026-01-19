@@ -185,7 +185,7 @@ NODE_ENV=development
 
 # AI Analysis Configuration
 AI_PROVIDER=openai                    # openai, anthropic, or azure
-AI_OPENAI_API_KEY=your-openai-key    # OpenAI API key
+AI_API_KEY=your-openai-key           # OpenAI API key
 AI_OPENAI_MODEL=gpt-4                # gpt-4, gpt-4-turbo, gpt-3.5-turbo
 AI_ANTHROPIC_API_KEY=your-claude-key # Anthropic Claude API key (optional)
 AI_AZURE_API_KEY=your-azure-key      # Azure OpenAI API key (optional)
@@ -281,7 +281,7 @@ Configure these secrets in your GitHub repository settings:
 
 - `RFPMART_USERNAME`: Your RFP Mart login email
 - `RFPMART_PASSWORD`: Your RFP Mart password
-- `AI_OPENAI_API_KEY`: Your OpenAI API key for AI analysis (e.g., sk-proj-...)
+- `AI_API_KEY`: Your OpenAI API key for AI analysis (e.g., sk-proj-...)
 
 Optional secrets for advanced AI providers:
 - `AI_ANTHROPIC_API_KEY`: Anthropic Claude API key (if using Claude)

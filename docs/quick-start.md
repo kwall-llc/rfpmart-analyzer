@@ -12,7 +12,7 @@ Go to your GitHub repository **Settings** → **Secrets and variables** → **Ac
 ```
 RFPMART_USERNAME: your-rfpmart-email@company.com
 RFPMART_PASSWORD: your-rfpmart-password
-AI_OPENAI_API_KEY: sk-proj-your-openai-key-here
+AI_API_KEY: sk-proj-your-openai-key-here
 ```
 
 **Need an OpenAI API key?** Visit [OpenAI Platform](https://platform.openai.com/api-keys)
@@ -60,7 +60,7 @@ Look for automatically created GitHub Issues
 ## Common Issues
 
 ### "Secret not found" error
-- Double-check secret names are exactly: `RFPMART_USERNAME`, `RFPMART_PASSWORD`, `AI_OPENAI_API_KEY`
+- Double-check secret names are exactly: `RFPMART_USERNAME`, `RFPMART_PASSWORD`, `AI_API_KEY`
 - Verify you have admin access to the repository
 
 ### Workflow permission errors

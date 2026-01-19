@@ -43,7 +43,7 @@ Navigate to **Settings** → **Secrets and variables** → **Actions** and add t
 - **Value**: Your RFP Mart password
 - **Description**: Used for authenticated access to RFP listings
 
-#### `AI_OPENAI_API_KEY`
+#### `AI_API_KEY`
 - **Value**: Your OpenAI API key (e.g., `sk-proj-...`)
 - **Description**: Required for AI-powered RFP analysis
 - **How to get**: Visit [OpenAI Platform](https://platform.openai.com/api-keys)

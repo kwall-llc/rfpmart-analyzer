@@ -52,11 +52,19 @@ Configured servers in `.mcp.json`:
 /git commit --validate --safe-mode
 ```
 
-### Recent Fixes (2025-11-11)
+### Recent Fixes
+
+#### 2026-01-19: Security Remediation Complete
+- **✅ Git History Sanitized**: Successfully removed ALL credential traces from 143 commits
+- **✅ Verification Complete**: Zero occurrences of exposed credentials in entire repository
+- **✅ Documentation Updated**: SECURITY.md reflects successful sanitization
+- **⚠️ Action Required**: Rotate RFP Mart credentials and update GitHub Secrets
+
+#### 2025-11-11: Initial Security Improvements
 - **✅ Fixed Document Processing**: Resolved null safety errors that prevented RFP analysis
 - **✅ Fixed GitHub Pages**: Enabled automated dashboard deployment
-- **✅ Security Audit**: Removed exposed credentials and added comprehensive security documentation
-- **🔧 Git History**: Documented credential exposure in early commits (see SECURITY.md)
+- **✅ Security Audit**: Removed exposed credentials from active files
+- **🔧 Git History**: Documented credential exposure in early commits
 
 ### RFP Analysis Commands
 ```bash
